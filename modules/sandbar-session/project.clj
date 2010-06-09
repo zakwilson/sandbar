@@ -1,4 +1,4 @@
-(defproject sandbar/sandbar-session "0.2.3"
+(defproject sandbar/sandbar-session "0.2.4"
   :description "Easier session management for Ring."
   :dependencies [[org.clojure/clojure "1.1.0"]
                  [org.clojure/clojure-contrib "1.1.0"]
