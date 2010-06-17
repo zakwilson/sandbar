@@ -11,7 +11,6 @@
    manipulation. Also showing that they can be used simultaniously
    buy do not interfere with one another."
   (:use (ring.adapter jetty)
-        (ring.middleware params)
         (compojure core)
         (hiccup core page-helpers)
         (sandbar stateful-session)))
@@ -53,8 +52,7 @@
                 [:div (link-to "/stateful" "Stateful")]])))
 
 (def app (-> my-routes
-             wrap-stateful-session
-             wrap-params))
+             wrap-stateful-session))
 
 (defn run []
   (run-jetty (var app) {:join? false :port 8080}))
