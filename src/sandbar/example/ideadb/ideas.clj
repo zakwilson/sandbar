@@ -7,6 +7,7 @@
 ;; You must not remove this notice, or any other, from this software.
 
 (ns sandbar.example.ideadb.ideas
+  (:require [sandbar.example.ideadb.data :as data])
   (:use (hiccup core)
         (ring.util [response :only (redirect)])
         (sandbar core
@@ -15,10 +16,8 @@
                               any-role-granted?)]
                  stateful-session
                  util)
-(sandbar.dev tables forms validation standard-pages)
-        (sandbar.example.ideadb properties
-                        data
-                        layouts)))
+        (sandbar.dev tables forms validation standard-pages)
+        (sandbar.example.ideadb properties layouts)))
 
 ;;
 ;; Idea List
@@ -37,23 +36,28 @@
       {:column :business_unit :actions #{:sort :filter}} 
       {:column :status :actions #{:sort :filter}}])
 
+;; TODO - Add a feature to Carte that will allow you to ensure that a
+;; criteria is met no matter what previous criteria have been set.
+;; Carte should be able to deal with an empty criteria list.
+
 (defn idea-table-records-function [request]
-  (if (admin-role? request)
-    filter-and-sort-records
-    (fn [type filters sort-and-page]
-      (filter-and-sort-records type
-                               (merge filters
-                                      {:user_id (current-username)})
-                               sort-and-page))))
+  (fn [type filters sort-and-page]
+    (cond (empty? filters) (data/fetch type)
+          :else (data/fetch type
+                            (if (not (data/admin-role? request))
+                              (merge filters
+                                     {:user_id (current-username)})
+                              filters)
+                            #_sort-and-page))))
 
 (defn generate-welcome-message [request]
-  (if (not (admin-role? request))
+  (if (not (data/admin-role? request))
     [:div {:id "welcome-message"}
      (str "Welcome " (current-username)
           "! The table below displays all of the ideas you have submitted.")]))
 
 (defn idea-list-view [request]
-  (let [admin (admin-role? request)]
+  (let [admin (data/admin-role? request)]
     (generate-welcome-message request)
     (html
      (filter-and-sort-table
@@ -77,7 +81,7 @@
   (< 0 (count ((idea-table-records-function request) :idea {} {}))))
 
 (defn idea-list [request]
-  (if (or (admin-role? request)
+  (if (or (data/admin-role? request)
           (user-has-ideas? request))
     (list-layout "Idea List"
                  request
@@ -85,7 +89,7 @@
     (redirect (cpath "/idea/new"))))
 
 (defn idea-download-view []
-  (let [data (filter-and-sort-records :idea {} {})
+  (let [data (data/fetch :idea)
         fields [:id :name :description :customer_need :originator
                 :date_entered :category :idea_type :business_unit :status]
         data (concat [(map #(% properties) fields)]
@@ -120,27 +124,27 @@
 (defn admin-idea-fields []
   [(form-select "Category"
                :category :name :name
-               (get-list :idea_category)
+               (data/fetch :idea_category :order-by :name)
                {}
                {"" "Select a Category..."})
    (form-select "Type"
                 :idea_type :name :name
-                (get-list :idea_type)
+                (data/fetch :idea_type :order-by :name)
                 {}
                 {"" "Select a Type..."})
    (form-select "Business Unit"
                 :business_unit :name :name
-                (get-list :business_unit)
+                (data/fetch :business_unit :order-by :name)
                 {}
                 {"" "Select a Business Unit..."})
    (form-select "Status"
                 :status :name :name
-                (get-list :idea_status)
+                (data/fetch :idea_status :order-by :name)
                 {}
                 {"" "Select a Status..."})])
 
 (defn new-idea-form [request]
-  (let [admin (admin-role? request)]
+  (let [admin (data/admin-role? request)]
     (standard-form "Submit an Idea" "/idea/new" 
                    (if admin
                      {:submit "Save and Close" :submit-and-new "Save and New"}
@@ -180,7 +184,8 @@
 (defn save-idea-success-fn [action success]
   (fn [form-data]
     (do
-      (save form-data)
+      (println form-data)
+      (data/save form-data)
       (set-flash-value! :user-message (if (= action "new")
                                         "Your idea has been successfully
                                          submitted."
@@ -217,7 +222,7 @@
 ;;
 
 (defn edit-idea-form [request params]
-  (let [form-data (find-by-id :idea (get params "id"))]
+  (let [form-data (data/fetch-id :idea (get params "id"))]
     (standard-form "Administrator Form" "/idea/edit"
                    "Save Changes"
                    (form-layout-grid [1 1 1 1 4]
@@ -248,7 +253,7 @@
 (defn delete-idea [request]
   (form-layout "Confirm Delete Idea"
                request
-               (confirm-delete find-by-id
+               (confirm-delete data/fetch-id
                                :idea
                                properties
                                (get (:params request) "id"))))
@@ -256,5 +261,5 @@
 (defn delete-idea-post [{params :params}]
   (do
     (if (not (form-cancelled? params))
-      (delete-by-id :idea (get params "id")))
+      (data/delete-id :idea (get params "id")))
     (redirect "list")))

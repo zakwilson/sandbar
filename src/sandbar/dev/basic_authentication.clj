@@ -17,14 +17,14 @@
                                           session-delete-key!)]
                  [core :only (property-lookup)])
         (sandbar.dev [forms :only (form-layout-grid
-                               form-textfield
-                               form-password
-                               login-form
-                               get-params
-                               store-errors-and-redirect)]
-                 [validation :only (build-validator
-                                    non-empty-string
-                                    if-valid)])))
+                                   form-textfield
+                                   form-password
+                                   login-form
+                                   get-params
+                                   store-errors-and-redirect)]
+                     [validation :only (build-validator
+                                        non-empty-string
+                                        if-valid)])))
 
 (defn basic-auth [request]
   (do (session-put! :auth-redirect-uri

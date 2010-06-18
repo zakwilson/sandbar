@@ -13,16 +13,15 @@
                  [core :only (cpath
                               clink-to
                               property-lookup)]
-                 
                  util)
-(sandbar.dev 				user-manager
-                 standard-pages
-                 list-manager
-                 basic-authentication
-                 autorouter)
+        (sandbar.dev user-manager
+                     standard-pages
+                     list-manager
+                     basic-authentication
+                     autorouter)
         (sandbar.example.ideadb properties
-                        layouts
-                        users))
+                                layouts
+                                users))
   (:require (sandbar.example.ideadb [data :as data])))
 
 ;;
@@ -74,11 +73,6 @@
 ;; ======
 ;;
 
-(defn with-db-configured [handler]
-  (fn [request]
-    (data/configure-database request)
-    (handler request)))
-
 (defn route-adapter
   "Adapt the routing algorithm to this project."
   [c a]
@@ -95,10 +89,10 @@
       [c a])))
 
 (defn simple-list [type properties]
-  {:paged-list (fn [filters] (data/paged-list type filters))
-   :find-by-id (fn [id] (data/find-by-id type id))
+  {:paged-list (fn [filters] (data/fetch type filters))
+   :find-by-id (fn [id] (data/fetch-id type id))
    :save (fn [m] (data/save m))
-   :delete-by-id (fn [id] (data/delete-by-id type id))
+   :delete-by-id (fn [id] (data/delete-id type id))
    :visible-name (property-lookup properties type)
    :id type
    :properties properties})

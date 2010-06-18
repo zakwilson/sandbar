@@ -7,9 +7,9 @@
 ;; You must not remove this notice, or any other, from this software.
 
 (ns sandbar.example.ideadb.migrations
-  (:require [sandbar.database :as database])
+  (:require [carte.sql :as database])
   (:use (clojure.contrib [seq-utils :only (flatten)])
-        (example.ideadb [data :only (get-connection-info)])))
+        (sandbar.example.ideadb [data :only (get-connection-info)])))
 
 ;; TODO - Add library support and update this file so that you can
 ;; easily add new migration functions when the database changes.
@@ -19,7 +19,7 @@
 ;; then run (create-tables).
 ;;
 
-(defn mysql-db [] {:connection (get-connection-info {})})
+(defn mysql-db [] {:connection (get-connection-info)})
 
 ;;
 ;; Table Schema
@@ -108,9 +108,9 @@
   ([] (create-tables nil))
   ([drop]
      (let [db (:connection (mysql-db))
-           drop-fn (partial database/db-drop-table db)
-           insert-fn (partial database/db-insert db)
-           create-table-fn (partial database/db-do-commands db)] 
+           drop-fn (partial database/sql-drop-table db)
+           insert-fn (partial database/sql-insert db)
+           create-table-fn (partial database/sql-do-commands db)] 
        (do
          (if drop
            (do (drop-fn :idea)

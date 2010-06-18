@@ -10,12 +10,12 @@
   (:use (ring.util [response :only (redirect)])
         (compojure core)
         (sandbar core
+                 util
                  stateful-session
-                 [auth :only (hash-password)]
-                 )
-(sandbar.dev 				forms tables util
-                 standard-pages validation
-                 basic-authentication)))
+                 [auth :only (hash-password)])
+        (sandbar.dev forms tables 
+                     standard-pages validation
+                     basic-authentication)))
 
 (defn secure-user
   "Ensure that the user has a salt value associated with it and that if the
@@ -53,6 +53,9 @@
              :else (k row-data)))
      load-fn)])
 
+(defn roles-multi-checkbox [load-fn props]
+     (form-multi-checkbox props :roles (load-fn :role) :name))
+
 (defn user-form-fields [load-fn props]
   [(form-textfield props :username :required)
    (form-password props :new_password :required)
@@ -60,7 +63,7 @@
    (form-textfield props :last_name :required)
    (form-textfield props :email :required)
    (form-checkbox props :account_enabled)
-   (form-multi-checkbox props :roles (load-fn :role) :name)])
+   (roles-multi-checkbox load-fn props)])
 
 (defn edit-user-form [data-fns props request]
   (let [lookup-fn (fn [r] ((data-fns :lookup) :app_user (get (:params r) "id")))
@@ -121,56 +124,6 @@
 ;; Functions for working with users
 ;; ================================
 ;;
-
-(defn load-user-by [load-fn user k]
-  (first
-   (load-fn :app_user
-            {k (user k)}
-            {})))
-
-(defn standard-save-user [user load-fn delete-fn save-fn]
-  (let [all-roles (index-by :name (load-fn :role))
-        new-roles (map #(all-roles %) (:roles user))
-        new-role-ids (set (map :id new-roles))
-        user-part (dissoc user :roles)
-        current-roles (load-fn :user_role
-                               {:user_id (:id user)}
-                               {})
-        current-role-ids (set (map :role_id current-roles))
-        d-roles (filter #(not (contains? new-role-ids (:role_id %)))
-                        current-roles)]
-    (do
-      (save-fn (secure-user user-part (load-user-by load-fn user :id)))
-      (let [saved-user-id (:id (load-user-by load-fn user :username))
-            a-roles (map #(hash-map :type :user_role
-                                    :role_id (:id %)
-                                    :user_id saved-user-id)
-                         (filter #(not (contains? current-role-ids
-                                                  (:id %)))
-                                 new-roles))]
-        (do
-          (doseq [next d-roles]
-            (delete-fn next))
-          (doseq [next a-roles]
-            (save-fn next)))))))
-
-(defn standard-lookup-user [type id load-fn lookup-fn]
-  (let [user (lookup-fn type id)
-        roles (load-fn :role)
-        user-role-ids
-        (set (map :role_id
-                  (load-fn :user_role
-                           {:user_id id}
-                           {})))
-        user-roles (filter #(contains? user-role-ids (:id %)) roles)]
-    (assoc user :roles (vec (map :name user-roles)))))
-
-(defn standard-delete-user [type id load-fn delete-fn]
-  (let [user (first (load-fn type {:id id} {}))
-        roles (load-fn :user_role {:user_id (:id user)} {})]
-    (doseq [next-role roles]
-      (delete-fn :user_role (:id next-role)))
-    (delete-fn type (:id user))))
 
 (defn user-model [load-fn]
   {:load-login-user

@@ -13,12 +13,12 @@
         (ring.middleware params file file-info)
         (compojure core)
         (hiccup core page-helpers)
-        (sandbar core stateful-session auth
-                 basic-authentication validation)
-        (example [auth-demo :only (load-data-from
-                                   layout
-                                   home-view admin-view member-view
-                                   permission-denied-view)])))
+        (sandbar core stateful-session auth)
+        (sandbar.dev basic-authentication validation)
+        (sandbar.example [auth-demo :only (load-data-from
+                                           layout
+                                           home-view admin-view member-view
+                                           permission-denied-view)])))
 
 ;; Building on the auth-demo code, adding form based
 ;; authentication. Please check out that demo first in order to

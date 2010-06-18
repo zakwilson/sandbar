@@ -12,13 +12,14 @@
                          [file :only (wrap-file)])
         (ring.adapter jetty)
         (ring.middleware params stacktrace file file-info session)
-        (sandbar core auth stateful-session
-                 )
-        (sandbar.dev 		[standard-pages :only (page-not-found-404)]
-                 [basic-authentication :only (basic-auth)])
-        (sandbar.example.ideadb
-         control
-         [layouts :only (main-layout)])))
+        (sandbar core auth stateful-session)
+        (sandbar.dev [standard-pages :only (page-not-found-404)]
+                     [basic-authentication :only (basic-auth)])
+        (sandbar.example.ideadb control
+                                [layouts :only (main-layout)]))
+    (:require (sandbar.example.ideadb [data :as data])))
+
+(data/configure-database :development)
 
 (defroutes development-routes
   ideadb-routes
@@ -36,7 +37,6 @@
 
 (def app
      (-> development-routes
-         with-db-configured
          (with-security security-config basic-auth)
          wrap-stateful-session
          wrap-params

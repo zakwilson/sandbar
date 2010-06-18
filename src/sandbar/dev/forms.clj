@@ -146,8 +146,10 @@
 (defn form-textarea
   ([title fname options] (form-textarea title fname options :optional))
   ([title fname options req]
-     {fname [(form-field-label title req)
-             [:textarea (merge {:name (name fname)} options)]]}))
+     {:type :textarea
+      :label (form-field-label title req)
+      :field-name fname
+      :html [:textarea (merge {:name (name fname)} options)]}))
 
 (defn form-textfield
   "Create a form text field. In each arity, title can be either a string or
@@ -159,34 +161,39 @@
                            (form-textfield title fname {:size 35} options)
                            (form-textfield title fname options :optional)))
   ([title fname options req]
-     {fname [(form-field-label (if (map? title)
+     {:type :textfield
+      :label (form-field-label (if (map? title)
                                  (property-lookup title fname)
                                  title) req)
-             [:input
+      :field-name fname
+      :html [:input
               (merge {:type "Text" :name (name fname) :value ""
-                      :class "sandbar-textfield"} options)]]}))
+                      :class "sandbar-textfield"} options)]}))
 
 (defn form-password
   "Use form-textfield to create a text field and then change it to a
    password field."
   [& args]
-  (let [textfield (first (apply form-textfield args))]
-    {(key textfield) [(first (val textfield))
-                      [:input (merge (last (last (val textfield)))
-                                     {:type "Password"})]]}))
+  (let [textfield (apply form-textfield args)]
+    (-> textfield
+        (assoc :type :password)
+        (assoc :html [:input (merge (last (:html textfield))
+                                    {:type "Password"})]))))
 
 (defn form-checkbox
   "Create a form checkbox. The title can be a map or a string. If it is a map
    then the displayed title will be looked up in the map using fname."
   ([title fname] (form-checkbox title fname {}))
   ([title fname options]
-     {fname [[:span {:class "field-label"} (if (map? title)
+     {:type :checkbox
+      :label [:span {:class "field-label"} (if (map? title)
                                              (property-lookup title fname)
-                                             title)] 
-             [:input
-              (merge {:type "checkbox"
-                      :name (name fname)
-                      :value "checkbox-true"} options)]]}))
+                                             title)]
+      :field-name fname
+      :html [:input
+             (merge {:type "checkbox"
+                     :name (name fname)
+                     :value "checkbox-true"} options)]}))
 
 (defn get-yes-no-fields
   "Get Y or N values for all keys in cb-set. These keys represent checkboxes
@@ -216,15 +223,17 @@
                           ((:all-items many-spec))
                           (:name-fn many-spec)))
   ([props fname coll value-fn]
-     {fname
-      [[:span {:class "group-title"} (property-lookup props fname)]
-       (wrap-checkboxes-in-group
-        (map
-         #(let [value (value-fn %)]
-            [:input
-             {:type "checkbox" :name fname :value value}
-             (property-lookup props (keyword value))])
-         coll))]}))
+     {:type :multi-checkbox
+      :label [:span {:class "group-title"} (property-lookup props fname)]
+      :field-name fname
+      :html (wrap-checkboxes-in-group
+              (map
+               #(let [value (value-fn %)]
+                  [:input
+                   {:type "checkbox" :name fname :value value}
+                   (property-lookup props (keyword value))])
+               coll))
+      :value-fn value-fn}))
 
 (defn get-multi-checkbox
   "Add the key k to the map m where the value of k is is a vector of
@@ -243,7 +252,10 @@
     (= "group" (:class attrs))))
 
 (defn form-hidden [fname]
-  {fname [[:input {:type "hidden" :name (name fname) :value ""}]]})
+  {:type :hidden
+   :label ""
+   :field-name fname
+   :html [:input {:type "hidden" :name (name fname) :value ""}]})
 
 (defn select-map [coll key-key value-key]
   (apply merge (map #(sorted-map (key-key %) (value-key %)) coll)))
@@ -253,32 +265,64 @@
      (form-select title fname k v coll opts top :optional))
   ([title fname k v coll opts top req]
      (let [s-map (select-map coll k v)]
-       {fname [(form-field-label title req)
-               (vec
-                (concat
-                 [:select (merge {:name (name fname)} opts)]
-                 [[:option {:value (key (first top))} (val (first top))]] 
-                 (map #(vector :option {:value (key %)} (val %))
-                      s-map)))]})))
+       {:type :select
+        :label (form-field-label title req)
+        :field-name fname
+        :html (vec
+               (concat
+                [:select (merge {:name (name fname)} opts)]
+                [[:option {:value (key (first top))} (val (first top))]] 
+                (map #(vector :option {:value (key %)} (val %))
+                     s-map)))})))
 
-(defmulti set-form-field-value (fn [a b] (first b)))
+(defmulti set-form-field-value (fn [a b] (:type b)))
 
 (defn- set-form-field-value* [form-state input-field update-fn]
-  (let [field-name (:name (last input-field))
+  (let [field-name (:field-name input-field)
         previous-val ((keyword field-name) (:form-data form-state))]
     (if previous-val
-      (update-fn previous-val)
+      (update-fn previous-val (:html input-field))
       input-field)))
+
+(defn set-input-form-field-value [form-state input-field]
+  (set-form-field-value*
+   form-state
+   input-field
+   (fn [previous-value html]
+     (assoc input-field :html
+            (vector :input
+                    (assoc
+                        (last html) :value previous-value))))))
+
+
+(defmethod set-form-field-value :textfield [form-state input-field]
+  (set-input-form-field-value form-state input-field))
+
+(defmethod set-form-field-value :hidden [form-state input-field]
+  (set-input-form-field-value form-state input-field))
+
+(defmethod set-form-field-value :password [form-state input-field]
+  (set-input-form-field-value form-state input-field))
+
+(defmethod set-form-field-value :checkbox [form-state input-field]
+  (set-form-field-value*
+   form-state
+   input-field
+   (fn [previous-value html]
+     (assoc input-field :html
+            (vector :input (if (= previous-value "Y")
+                             (assoc (last html) :checked "true")
+                             (last html)))))))
 
 (defmethod set-form-field-value :textarea [form-state input-field]
   (set-form-field-value*
    form-state
    input-field
-   (fn [previous-value]
-     (conj input-field previous-value))))
+   (fn [previous-value html]
+     (assoc input-field :html (conj html previous-value)))))
 
 (defmethod set-form-field-value :select [form-state input-field]
-  (let [field-name (:name (second input-field))
+  (let [field-name (:field-name input-field)
         previous-val ((keyword field-name) (:form-data form-state))]
     (if previous-val
       (apply vector
@@ -291,26 +335,12 @@
                   input-field))
       input-field)))
 
-(defmethod set-form-field-value :input [form-state input-field]
-  (set-form-field-value*
-   form-state
-   input-field
-   (fn [previous-value]
-     (if (checkbox? input-field)
-       (vector :input (if (= previous-value "Y")
-                        (assoc (last input-field) :checked "true")
-                        (last input-field)))
-       (vector :input (assoc (last input-field) :value previous-value))))))
-
-;; Set the value of a multi-checkbox. This will make sure all of the
-;; selected checkboxes are checked.
-(defmethod set-form-field-value :div [form-state input-field]
-  (let [title (second input-field)
-        checkboxes (map last (last (last input-field)))
-        field-name (:name (second (first checkboxes)))
+(defmethod set-form-field-value :multi-checkbox [form-state input-field]
+  (let [title (:label input-field)
+        checkboxes (map last (last (:html input-field)))
+        field-name (:field-name input-field)
         field-value (field-name (:form-data form-state))
-        value-set (set (cond (string? field-value) [field-value]
-                             :else field-value))
+        value-set (set (map #((:value-fn input-field) %) field-value))
         new-checkboxes (map #(vector :input
                                      (let [attrs (second %)]
                                        (if (contains? value-set
@@ -319,45 +349,54 @@
                                         attrs))
                                      (last %))
                             checkboxes)]
-    [:div title (wrap-checkboxes-in-group new-checkboxes)]))
+    (assoc input-field :html
+           (wrap-checkboxes-in-group new-checkboxes))))
 
-(defn create-form-field-cell
-  "Create a cell in a form layout which contains the field label and input.
-   This cell will also contain an error message if there is one to display."
-  [form-state m]
-  (if (= 2 (count (val (first m))))
-    (let [entry (first m)
-          entry-key (key entry)
-          title (first (val entry))
-          input-field (last (val entry))
-          error-message (first (entry-key form-state))
-          title-row (cond (checkbox? input-field)
-                          [:div "&nbsp;"]
-                          (checkbox-group? input-field)
-                          [:div]
-                          :else title)
-          field-row (vec
-                     (filter #(not (nil? %))
-                             [:div
-                              (set-form-field-value
-                               form-state
-                               (if (checkbox-group? input-field)
-                                 [:div title input-field]
-                                 input-field))
-                              (if (checkbox? input-field)
-                                title)]))]
-      (if error-message
-        [:div
-         title-row
-         [:div {:class "error-message"} error-message]
-         field-row]
-        [:div title-row field-row]))))
+(defmulti create-form-field-cell (fn [_ m] (:type m)))
+
+(defn filter-nil-vec [coll]
+  (filter #(not (nil? %)) coll))
+
+(defmethod create-form-field-cell :checkbox [form-state m]
+  (let [{:keys [_ label field-name html]} m
+        error-message (first (field-name form-state))
+        field-row (filter-nil-vec [:div
+                                   (:html (set-form-field-value form-state m))
+                                   label])]
+    (if error-message
+      [:div
+       [:div {:class "error-message"} error-message]
+       field-row]
+      field-row)))
+
+(defmethod create-form-field-cell :multi-checkbox [form-state m]
+  (let [{:keys [_ label field-name html]} m
+        error-message (first (field-name form-state))
+        field-row (filter-nil-vec
+                   (:html (set-form-field-value form-state m)))]
+    (if error-message
+      [:div
+       [:div {:class "error-message"} error-message]
+       label field-row]
+      [:div label field-row])))
+
+(defmethod create-form-field-cell :default [form-state m]
+  (let [{:keys [_ label field-name html]} m
+        error-message (first (field-name form-state))
+        field-row (filter-nil-vec
+                   (:html (set-form-field-value form-state m)))]
+    (if error-message
+      [:div
+       label
+       [:div {:class "error-message"} error-message]
+       field-row]
+      [:div label field-row])))
 
 (defn- create-hidden-field [form-state m]
   (let [entry (first m)
         entry-key (key entry)
         input-field (last (val entry))]
-    (set-form-field-value form-state input-field)))
+    (:html (set-form-field-value form-state input-field))))
 
 (def one-column-layout (repeat 1))
 

@@ -13,8 +13,7 @@
                  [auth :only (current-user
                               current-username
                               any-role-granted?)]
-                 stateful-session)
-        (sandbar.example.ideadb data)))
+                 stateful-session)))
 
 (defn base-layout [title header request & body]
   (html

@@ -7,19 +7,11 @@
 ;; You must not remove this notice, or any other, from this software.
 
 (ns sandbar.dev.user-tables-mysql
-  (:use (sandbar auth util
-                 [database :as database])))
+  (:use (sandbar auth util))
+  (:require (carte [sql :as database])))
 
 ;; Create user tables in mysql. To create these tables, load this file
 ;; and then run (create-tables).
-
-(defn get-connection []
-  {:connection
-   {:classname "com.mysql.jdbc.Driver"
-    :subprotocol "mysql"
-    :subname "//localhost/idea_db"
-    :user "idea_user"
-    :password "123456789"}})
 
 (defn- create-user-table [create-table-fn]
   (create-table-fn
@@ -91,14 +83,12 @@
   (insert-fn :user_role {:user_id 1 :role_id 1})
   (insert-fn :user_role {:user_id 2 :role_id 2}))
 
-;; TODO - You should be able to pass a configuration to this function
 (defn create-tables
-  ([] (create-tables nil))
-  ([drop]
-     (let [db (get-connection)
-           drop-fn (partial database/db-drop-table db)
-           insert-fn (partial database/db-insert db)
-           create-table-fn (partial database/db-do-commands db)] 
+  ([db] (create-tables db nil))
+  ([db drop]
+     (let [drop-fn (partial database/sql-drop-table db)
+           insert-fn (partial database/sql-insert db)
+           create-table-fn (partial database/sql-do-commands db)] 
        (do
          (if drop
            (do (drop-fn :user_role)

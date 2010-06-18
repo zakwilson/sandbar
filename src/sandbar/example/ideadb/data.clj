@@ -11,63 +11,62 @@
         (sandbar [auth :only (current-user
                               ensure-any-role-if
                               any-role-granted?)])
-(carte [core :only (fetch delete-record save-or-update)])))
+        (carte model))
+  (:require [carte.core :as carte]))
+
+;; TODO - I want to require model here but the model macro will not
+;; allow me to do that. Fix this in Carte.
 
 (def db (atom nil))
 
-(defn request-att [request name]
-  (if-let [sr (:servlet-request request)]
-    (.getAttribute sr name)))
+;; TODO - Update the database to use more associations and be a better
+;; example of carte usage.
 
-(defn get-connection-info [request]
+(def idea-model
+     (model
+      (app_user [:id :username :password :salt :first_name :last_name :email
+                 :account_enabled]
+                (many-to-many roles :role :=> :user_role :user_id :role_id))
+      (role [:id :name])
+      (idea [:id :name :description :customer_need :originator :date_entered
+             :archive :business_unit :category :status :idea_type])
+      (business_unit [:id :name])
+      (idea_category [:id :name])
+      (idea_status [:id :name])
+      (idea_type [:id :name])))
+
+(defn get-connection-info [context]
   {:connection
-   (-> {}
-       (assoc :classname
-         (or (request-att request "classname")
-             "com.mysql.jdbc.Driver"))
-       (assoc :subprotocol
-         (or (request-att request "subprotocol")
-             "mysql"))
-       (assoc :subname
-         (or (request-att request "subname")
-             "//localhost/idea_db"))
-       (assoc :user
-         (or (request-att request "user")
-             "idea_user"))
-       (assoc :password
-         (or (request-att request "password")
-             "123456789")))})
+   {:classname "com.mysql.jdbc.Driver"
+    :subprotocol "mysql"
+    :subname "//localhost/idea_db"
+    :user "idea_user"
+    :password "123456789"}})
 
-(defn configure-database [request]
+(defn configure-database [context]
   (if (not @db)
-    (swap! db (fn [a b] b) (get-connection-info request))))
+    (swap! db (fn [a b] b) (merge idea-model
+                                  (get-connection-info context)))))
 
-(defn get-list [type]
-  (let [the-list (fetch @db type)]
-    (sort-by :name the-list)))
+(defn fetch [& body]
+  (println "fetch:" body)
+  (apply carte/fetch @db body))
 
-(defn filter-and-sort-records
-  ([type]
-     (filter-and-sort-records type {} {}))
-  ([type filters sort-and-page]
-     (fetch @db type filters sort-and-page)))
+(defn fetch-one [& body]
+  (apply carte/fetch-one @db body))
 
-(defn find-by-id [type id]
-  (first (fetch @db type {:id id})))
+(defn fetch-id [table id]
+  (carte/fetch-one @db table {:id id}))
 
-(defn delete-by-id [type id]
-  (if-let [record (find-by-id type id)]
-    (delete-record @db type record)))
+(defn save [& body]
+  (apply carte/save-or-update @db body))
 
-(defn delete-rec [rec]
-  (delete-record @db (:type rec) rec))
+(defn delete [& body]
+  (apply carte/delete-record @db body))
 
-(defn paged-list [type page-params]
-  (let [the-list (fetch @db type)]
-    (sort-by :name the-list)))
-
-(defn save [m]
-  (save-or-update @db m))
+(defn delete-id [type id]
+  (if-let [record (fetch-id type id)]
+    (carte/delete-record @db type record)))
 
 (defn admin-role? [request]
   (any-role-granted? :admin))

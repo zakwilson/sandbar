@@ -7,31 +7,38 @@
 ;; You must not remove this notice, or any other, from this software.
 
 (ns sandbar.example.ideadb.users
-  (:use (sandbar core forms util user-manager)
-        (sandbar.example.ideadb data
-                        properties)))
+  (:require [sandbar.example.ideadb.data :as data])
+  (:use (sandbar core util)
+        (sandbar.dev forms user-manager)
+        (sandbar.example.ideadb properties)))
 
 (defn user-data-functions [k]
   (cond (= k :save)
         (fn [m]
           (if (= :app_user (:type m))
-            (standard-save-user m
-                                filter-and-sort-records
-                                delete-rec
-                                save)
-            (save m)))
-        (= k :load) filter-and-sort-records
+            (data/save (secure-user m (data/fetch-id :app_user (:id m))))
+            (data/save m)))
+        
+        (= k :load)
+        (fn
+          ([type]
+             (data/fetch type))
+          ([type filters sort-and-page]
+             (println "TODO - Implement sorting:" sort-and-page)
+             (cond (empty? filters) (data/fetch type)
+                   :else (data/fetch type filters))))
+        
         (= k :lookup)
         (fn [type id]
           (if (= :app_user type)
-            (standard-lookup-user type id
-                                  filter-and-sort-records
-                                  find-by-id)
-            (find-by-id type id)))
+            (data/fetch-one type {:id id} :with :roles)
+            (data/fetch-id type id)))
+        
         (= k :delete)
         (fn [type id]
           (if (= :app_user type)
-            (standard-delete-user type id
-                                  filter-and-sort-records
-                                  delete-by-id)
-            (delete-by-id type id)))))
+            (let [user (-> (data/fetch-one type :with :roles)
+                           (assoc :roles []))]
+              (do (data/save user)
+                  (data/delete user)))
+            (data/delete-id type id)))))
