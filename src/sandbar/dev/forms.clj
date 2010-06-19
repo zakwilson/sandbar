@@ -235,13 +235,17 @@
                coll))
       :value-fn value-fn}))
 
+(defn filter-nil-vec [coll]
+  (vec (filter #(not (nil? %)) coll)))
+
 (defn get-multi-checkbox
   "Add the key k to the map m where the value of k is is a vector of
    selected values."
-  [m params k]
+  [m params k all-values name-fn]
   (let [v (get params (name k))
-        value-seq (if (string? v) [v] v)]
-    (assoc m k (vec (filter #(not (nil? %)) value-seq)))))
+        selected-values (set (filter-nil-vec (if (string? v) [v] v)))
+        selected (filter #(contains? selected-values (name-fn %)) all-values)]
+    (assoc m k selected)))
 
 (defn checkbox? [field]
   (let [attrs (second field)]
@@ -354,9 +358,6 @@
 
 (defmulti create-form-field-cell (fn [_ m] (:type m)))
 
-(defn filter-nil-vec [coll]
-  (filter #(not (nil? %)) coll))
-
 (defmethod create-form-field-cell :checkbox [form-state m]
   (let [{:keys [_ label field-name html]} m
         error-message (first (field-name form-state))
@@ -393,10 +394,7 @@
       [:div label field-row])))
 
 (defn- create-hidden-field [form-state m]
-  (let [entry (first m)
-        entry-key (key entry)
-        input-field (last (val entry))]
-    (:html (set-form-field-value form-state input-field))))
+  (:html (set-form-field-value form-state m)))
 
 (def one-column-layout (repeat 1))
 
@@ -413,10 +411,10 @@
                      (map #(if-let [cell (create-form-field-cell form-state %)]
                              (vector cell)
                              nil)
-                          coll)))]
+                          (filter #(not (= (:type %) :hidden)) coll))))]
     (vec (concat the-form
                  (map #(create-hidden-field form-state %)
-                      (filter #(= 1 (count (val (first %)))) coll))))))
+                      (filter #(= (:type %) :hidden) coll))))))
 
 (defn form-layout-grid
   ([form-name coll request]
@@ -428,6 +426,8 @@
        (form-layout-grid* layout form-state coll)
        (form-layout-grid* layout {:form-data init-data} coll))))
 
+;; TODO - This should preserve metadata
+
 (defn clean-form-input
   "Set empty values to nil and remove the id if it is nil."
   [m]
@@ -438,5 +438,8 @@
                                     (empty? value))
                              nil
                              value)))
-              (if (:id m) m (dissoc m :id)))))
+              (if (and (:id m)
+                       (not (empty? (:id m))))
+                m
+                (dissoc m :id)))))
 

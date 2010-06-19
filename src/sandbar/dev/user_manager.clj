@@ -53,9 +53,6 @@
              :else (k row-data)))
      load-fn)])
 
-(defn roles-multi-checkbox [load-fn props]
-     (form-multi-checkbox props :roles (load-fn :role) :name))
-
 (defn user-form-fields [load-fn props]
   [(form-textfield props :username :required)
    (form-password props :new_password :required)
@@ -63,7 +60,7 @@
    (form-textfield props :last_name :required)
    (form-textfield props :email :required)
    (form-checkbox props :account_enabled)
-   (roles-multi-checkbox load-fn props)])
+   (form-multi-checkbox props :roles (load-fn :role) :name)])
 
 (defn edit-user-form [data-fns props request]
   (let [lookup-fn (fn [r] ((data-fns :lookup) :app_user (get (:params r) "id")))
@@ -88,12 +85,12 @@
                               :first_name :last_name :email]
                              params)
                  (get-yes-no-fields params #{:account_enabled})
-                 (get-multi-checkbox params :roles)
-                 (assoc :type :app_user)
-                 (clean-form-input))
+                 (get-multi-checkbox params :roles (load-fn :role) :name)
+                 clean-form-input)
         user (if (= "_unchanged" (:new_password user))
                user
                (assoc user :password (:new_password user)))]
+    (println user)
     user))
 
 (defn user-validator [props]
@@ -114,7 +111,7 @@
              failure (cpath (:uri request))]
          (if-valid (user-validator props) form-data
                    #(do
-                      (save-or-update-fn (dissoc % :new_password))
+                      (save-or-update-fn :app_user (dissoc % :new_password))
                       (set-flash-value! :user-message
                                         "User has been saved.")
                       success)

@@ -14,10 +14,10 @@
 
 (defn user-data-functions [k]
   (cond (= k :save)
-        (fn [m]
-          (if (= :app_user (:type m))
-            (data/save (secure-user m (data/fetch-id :app_user (:id m))))
-            (data/save m)))
+        (fn [type m]
+          (if (= :app_user type)
+            (data/save type (secure-user m (data/fetch-id type (:id m))))
+            (data/save type m)))
         
         (= k :load)
         (fn
@@ -37,8 +37,8 @@
         (= k :delete)
         (fn [type id]
           (if (= :app_user type)
-            (let [user (-> (data/fetch-one type :with :roles)
+            (let [user (-> (data/fetch-one type {:id id} :with :roles)
                            (assoc :roles []))]
-              (do (data/save user)
+              (do (data/save type user)
                   (data/delete user)))
             (data/delete-id type id)))))

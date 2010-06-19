@@ -59,6 +59,7 @@
   (carte/fetch-one @db table {:id id}))
 
 (defn save [& body]
+  (println "save:" body)
   (apply carte/save-or-update @db body))
 
 (defn delete [& body]

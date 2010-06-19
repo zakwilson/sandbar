@@ -35,17 +35,23 @@
      (t "when one item is seleted"
         (is (= (get-multi-checkbox {}
                                    {"a" "a"}
-                                   :a)
-               {:a ["a"]})))
+                                   :a
+                                   [{:id 1 :name "a"} {:id 2 :name "b"}]
+                                   :name)
+               {:a [{:id 1 :name "a"}]})))
      (t "when two items are seleted"
         (is (= (get-multi-checkbox {}
                                    {"a" ["a" "b"]}
-                                   :a)
-               {:a ["a" "b"]})))
+                                   :a
+                                   [{:id 1 :name "a"} {:id 2 :name "b"}]
+                                   :name)
+               {:a [{:id 1 :name "a"} {:id 2 :name "b"}]})))
      (t "when nothing is seleted"
         (is (= (get-multi-checkbox {}
                                    {}
-                                   :a)
+                                   :a
+                                   [{:id 1 :name "a"} {:id 2 :name "b"}]
+                                   :name)
                {:a []})))))
 
 (defn create-test-multi-checkbox [fname coll]
