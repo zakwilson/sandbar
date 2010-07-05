@@ -22,25 +22,25 @@
   (fn [request]
     (binding [*sandbar-session* (atom
                                  (-> request :session ::session))]
-        (let [response (handler request)
-              sandbar-session @*sandbar-session*
-              sandbar-session (if (empty? sandbar-session)
-                                nil
-                                sandbar-session)
-              request-session (dissoc (:session request) ::session)
-              response-session (:session response)
-              session  (if (contains? response :session)
-                         (or response-session {})
-                         request-session) 
-              session (if sandbar-session
-                        (assoc session ::session sandbar-session)
-                        session)]
-          (when response
-            (if (nil? session)
-              (dissoc response :session)
-              (if (empty? session)
-                (merge response {:session nil})
-                (merge response {:session session}))))))))
+      (let [response (handler request)
+            sandbar-session @*sandbar-session*
+            sandbar-session (if (empty? sandbar-session)
+                              nil
+                              sandbar-session)
+            request-session (dissoc (:session request) ::session)
+            response-session (:session response)
+            session  (if (contains? response :session)
+                       (or response-session {})
+                       request-session) 
+            session (if sandbar-session
+                      (assoc session ::session sandbar-session)
+                      session)]
+        (when response
+          (if (nil? session)
+            (dissoc response :session)
+            (if (empty? session)
+              (merge response {:session nil})
+              (merge response {:session session}))))))))
 
 (defn wrap-stateful-session [handler]
   (wrap-session

@@ -1,0 +1,7 @@
+lein compile
+rm -rf classes/hiccup
+rm -rf classes/clout
+rm -rf classes/compjure
+rm -rf classes/ring
+lein jar
+

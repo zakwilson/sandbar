@@ -89,7 +89,9 @@
       [c a])))
 
 (defn simple-list [type properties]
-  {:paged-list (fn [filters] (data/fetch type filters))
+  {:paged-list (fn [filters] (if (empty? filters)
+                               (data/fetch type)
+                               (data/fetch type filters)))
    :find-by-id (fn [id] (data/fetch-id type id))
    :save (fn [m] (data/save m))
    :delete-by-id (fn [id] (data/delete-id type id))

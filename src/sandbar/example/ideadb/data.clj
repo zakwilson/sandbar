@@ -22,6 +22,9 @@
 ;; TODO - Update the database to use more associations and be a better
 ;; example of carte usage.
 
+;; For some reason :category and :status are not showing up in
+;; queries. Debug the queries and see what is going on.
+
 (def idea-model
      (model
       (app_user [:id :username :password :salt :first_name :last_name :email
@@ -58,9 +61,14 @@
 (defn fetch-id [table id]
   (carte/fetch-one @db table {:id id}))
 
-(defn save [& body]
-  (println "save:" body)
-  (apply carte/save-or-update @db body))
+(defn save
+  ([m]
+     (if (contains? m :type)
+       (save (:type m) (dissoc m :type))
+       (save m)))
+  ([arg & body]
+     (println "save:" arg body)
+     (apply carte/save-or-update @db arg body)))
 
 (defn delete [& body]
   (apply carte/delete-record @db body))

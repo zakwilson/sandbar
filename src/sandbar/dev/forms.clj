@@ -327,16 +327,18 @@
 
 (defmethod set-form-field-value :select [form-state input-field]
   (let [field-name (:field-name input-field)
+        input-html (:html input-field)
         previous-val ((keyword field-name) (:form-data form-state))]
     (if previous-val
-      (apply vector
-             (map #(if (and (vector? %)
-                            (= :option (first %))
-                            (= previous-val (:value (second %))))
-                     [:option {:value previous-val :selected "selected"}
-                      (last %)]
-                     %)
-                  input-field))
+      (assoc input-field :html
+             (apply vector
+                    (map #(if (and (vector? %)
+                                   (= :option (first %))
+                                   (= previous-val (:value (second %))))
+                            [:option {:value previous-val :selected "selected"}
+                             (last %)]
+                            %)
+                         input-html)))
       input-field)))
 
 (defmethod set-form-field-value :multi-checkbox [form-state input-field]

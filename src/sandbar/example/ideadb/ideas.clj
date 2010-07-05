@@ -40,15 +40,18 @@
 ;; criteria is met no matter what previous criteria have been set.
 ;; Carte should be able to deal with an empty criteria list.
 
+;; TODO - Implement sorting.
+
 (defn idea-table-records-function [request]
   (fn [type filters sort-and-page]
-    (cond (empty? filters) (data/fetch type)
-          :else (data/fetch type
-                            (if (not (data/admin-role? request))
-                              (merge filters
-                                     {:user_id (current-username)})
-                              filters)
-                            #_sort-and-page))))
+    (println "sort-and-page:" sort-and-page)
+    (let [filters (if (not (data/admin-role? request))
+                    (merge filters
+                           {:user_id (current-username)})
+                    filters)]
+      (cond (empty? filters) (data/fetch type)
+            :else (data/fetch type filters
+                              #_sort-and-page)))))
 
 (defn generate-welcome-message [request]
   (if (not (data/admin-role? request))
@@ -177,15 +180,14 @@
                (current-username))
         idea (-> idea
                  (assoc :date_entered date)
-                 (assoc :user_id user)
-                 (assoc :type :idea))]
+                 (assoc :user_id user))]
     (clean-form-input idea)))
 
 (defn save-idea-success-fn [action success]
   (fn [form-data]
     (do
       (println form-data)
-      (data/save form-data)
+      (data/save :idea form-data)
       (set-flash-value! :user-message (if (= action "new")
                                         "Your idea has been successfully
                                          submitted."
