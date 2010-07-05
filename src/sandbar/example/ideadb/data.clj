@@ -10,23 +10,17 @@
   (:use [clojure.contrib.str-utils :only (re-split re-partition)]
         (sandbar [auth :only (current-user
                               ensure-any-role-if
-                              any-role-granted?)])
-        (carte model))
-  (:require [carte.core :as carte]))
-
-;; TODO - I want to require model here but the model macro will not
-;; allow me to do that. Fix this in Carte.
+                              any-role-granted?)]))
+  (:require (carte [core :as carte]
+                   [model :as model])))
 
 (def db (atom nil))
 
 ;; TODO - Update the database to use more associations and be a better
 ;; example of carte usage.
 
-;; For some reason :category and :status are not showing up in
-;; queries. Debug the queries and see what is going on.
-
 (def idea-model
-     (model
+     (model/model
       (app_user [:id :username :password :salt :first_name :last_name :email
                  :account_enabled]
                 (many-to-many roles :role :=> :user_role :user_id :role_id))
@@ -50,6 +44,23 @@
   (if (not @db)
     (swap! db (fn [a b] b) (merge idea-model
                                   (get-connection-info context)))))
+
+(defn carte-table-adapter
+  "Transform filter and sort information from a filter-and-sort table into
+   a query that carte can understand."
+  [table filters sort-and-page]
+  (let [query [table]
+        query (if (empty? filters) query (conj query filters))
+        query (if (or (empty? sort-and-page)
+                      (empty? (:sort sort-and-page)))
+                query
+                (vec
+                 (concat query
+                         [:order-by]
+                         (map #(let [[field dir] (reverse %)]
+                                 [(keyword field) dir])
+                              (partition 2 (:sort sort-and-page))))))]
+    query))
 
 (defn fetch [& body]
   (println "fetch:" body)

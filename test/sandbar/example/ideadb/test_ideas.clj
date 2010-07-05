@@ -31,3 +31,4 @@
        (t "when params have a date_entered"
           (is (= (create-idea-from-params {"date_entered" "2010-01-01"})
                  (assoc empty-idea :date_entered "2010-01-01")))))))
+

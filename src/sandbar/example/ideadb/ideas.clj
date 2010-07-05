@@ -40,8 +40,6 @@
 ;; criteria is met no matter what previous criteria have been set.
 ;; Carte should be able to deal with an empty criteria list.
 
-;; TODO - Implement sorting.
-
 (defn idea-table-records-function [request]
   (fn [type filters sort-and-page]
     (println "sort-and-page:" sort-and-page)
@@ -49,9 +47,9 @@
                     (merge filters
                            {:user_id (current-username)})
                     filters)]
-      (cond (empty? filters) (data/fetch type)
-            :else (data/fetch type filters
-                              #_sort-and-page)))))
+      (apply data/fetch (data/carte-table-adapter type
+                                            filters
+                                            sort-and-page)))))
 
 (defn generate-welcome-message [request]
   (if (not (data/admin-role? request))
