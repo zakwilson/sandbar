@@ -99,8 +99,6 @@
 (defn table-header [coll]
   [:tr (map #(vector :th {:nowrap ""} %) coll)])
 
-
-
 (defn standard-table [props columns column-fn data]
   [:table {:class "list"}
       (table-header (map #(if-let [p (props %)] p %) columns))
@@ -196,11 +194,18 @@
       (sort-table-header t-name props column-spec)
       (map
        (fn [row-data class]
-         (table-row (map #(hash-map
-                           :column (get-column-name %)
-                           :value (cell-fn (get-column-name %) row-data)
-                           :attr {:align (if-let [a (:align %)] a :left)}
-                           :actions (:actions %))
+         (table-row (map #(let [cell-data
+                                (cell-fn (get-column-name %) row-data)
+                                cell-data (if (map? cell-data)
+                                            cell-data
+                                            {:value cell-data})]
+                            (merge
+                             {:column (get-column-name %)
+                              :value nil
+                              :attr (merge {:align :left}
+                                           (:attr %))
+                              :actions (:actions %)}
+                             cell-data))
                          column-spec)
                     class))
        table-data

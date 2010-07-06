@@ -30,7 +30,7 @@
       :description
       :customer_need
       {:column :originator :actions #{:sort :filter}} 
-      {:column :date_entered :actions #{:sort :filter} :align :center} 
+      {:column :date_entered :actions #{:sort :filter} :attr {:align :center}} 
       {:column :category :actions #{:sort :filter}} 
       {:column :idea_type :actions #{:sort :filter}} 
       {:column :business_unit :actions #{:sort :filter}} 
