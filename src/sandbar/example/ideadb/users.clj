@@ -24,7 +24,7 @@
           ([type]
              (data/fetch type))
           ([type filters sort-and-page]
-             (println "TODO - Implement sorting:" sort-and-page)
+             (println "TODO - Implement sorting for users:" sort-and-page)
              (cond (empty? filters) (data/fetch type)
                    :else (data/fetch type filters))))
         

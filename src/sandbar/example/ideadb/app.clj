@@ -21,10 +21,6 @@
 
 (data/configure-database :development)
 
-(defroutes development-routes
-  ideadb-routes
-  (ANY "*" request (main-layout "404" request (page-not-found-404))))
-
 (def security-config
      [#"/admin.*"                   [:admin :ssl] 
       #"/idea/edit.*"               [:admin :ssl] 
@@ -34,6 +30,10 @@
       #"/login.*"                   [:any :ssl] 
       #".*.css|.*.js|.*.png|.*.gif" [:any :any-channel] 
       #".*"                         [#{:admin :user} :nossl]])
+
+(defroutes development-routes
+  ideadb-routes
+  (ANY "*" request (main-layout "404" request (page-not-found-404))))
 
 (def app
      (-> development-routes

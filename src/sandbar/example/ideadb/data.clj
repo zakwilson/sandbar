@@ -9,8 +9,10 @@
 (ns sandbar.example.ideadb.data
   (:use [clojure.contrib.str-utils :only (re-split re-partition)]
         (sandbar [auth :only (current-user
+                              current-username
                               ensure-any-role-if
-                              any-role-granted?)]))
+                              any-role-granted?)]
+                 [core :only (property-lookup)]))
   (:require (carte [core :as carte]
                    [model :as model])))
 
@@ -45,23 +47,6 @@
     (swap! db (fn [a b] b) (merge idea-model
                                   (get-connection-info context)))))
 
-(defn carte-table-adapter
-  "Transform filter and sort information from a filter-and-sort table into
-   a query that carte can understand."
-  [table filters sort-and-page]
-  (let [query [table]
-        query (if (empty? filters) query (conj query filters))
-        query (if (or (empty? sort-and-page)
-                      (empty? (:sort sort-and-page)))
-                query
-                (vec
-                 (concat query
-                         [:order-by]
-                         (map #(let [[field dir] (reverse %)]
-                                 [(keyword field) dir])
-                              (partition 2 (:sort sort-and-page))))))]
-    query))
-
 (defn fetch [& body]
   (println "fetch:" body)
   (apply carte/fetch @db body))
@@ -90,4 +75,46 @@
 
 (defn admin-role? [request]
   (any-role-granted? :admin))
+
+(defn carte-table-adapter
+  "Transform filter and sort information from a filter-and-sort table into
+   a query that carte can understand."
+  [table filters sort-and-page]
+  (let [query [table]
+        query (if (empty? filters) query (conj query filters))
+        query (if (or (empty? sort-and-page)
+                      (empty? (:sort sort-and-page)))
+                query
+                (vec
+                 (concat query
+                         [:order-by]
+                         (map #(let [[field dir] (reverse %)]
+                                 [(keyword field) dir])
+                              (partition 2 (:sort sort-and-page))))))]
+    query))
+
+;; TODO - Add a feature to Carte that will allow you to ensure that a
+;; criteria is met no matter what previous criteria have been set.
+;; Carte should be able to deal with an empty criteria list.
+
+(defn idea-table-records-function [request]
+  (fn [type filters sort-and-page]
+    (let [filters (if (not (admin-role? request))
+                    (merge filters
+                           {:user_id (current-username)})
+                    filters)]
+      (apply fetch (carte-table-adapter type
+                                        filters
+                                        sort-and-page)))))
+
+(defn simple-list [type properties]
+  {:paged-list (fn [filters] (if (empty? filters)
+                               (fetch type)
+                               (fetch type filters)))
+   :find-by-id (fn [id] (fetch-id type id))
+   :save (fn [m] (save m))
+   :delete-by-id (fn [id] (delete-id type id))
+   :visible-name (property-lookup properties type)
+   :id type
+   :properties properties})
 

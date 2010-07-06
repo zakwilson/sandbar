@@ -36,20 +36,6 @@
       {:column :business_unit :actions #{:sort :filter}} 
       {:column :status :actions #{:sort :filter}}])
 
-;; TODO - Add a feature to Carte that will allow you to ensure that a
-;; criteria is met no matter what previous criteria have been set.
-;; Carte should be able to deal with an empty criteria list.
-
-(defn idea-table-records-function [request]
-  (fn [type filters sort-and-page]
-    (println "sort-and-page:" sort-and-page)
-    (let [filters (if (not (data/admin-role? request))
-                    (merge filters
-                           {:user_id (current-username)})
-                    filters)]
-      (apply data/fetch (data/carte-table-adapter type
-                                            filters
-                                            sort-and-page)))))
 
 (defn generate-welcome-message [request]
   (if (not (data/admin-role? request))

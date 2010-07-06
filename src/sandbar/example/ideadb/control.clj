@@ -29,19 +29,6 @@
 ;; =====
 ;;
 
-(defn index-view []
-  [:div [:h3 "Welcome!"]
-   [:p "This is a sample application that uses many of the features of the
-         sandbar library. The application is a database for ideas. Imagine
-         that it is being used at a company to collect ideas from employees.
-         Administrators can view all ideas and edit them. Users can only add
-         ideas and view the ones that they have already added."] 
-    [:br] [:br]
-    [:div "User : " (current-username)]
-    [:div "Role : " (current-user-roles)]
-    [:br] [:br]
-    (clink-to "/ideas" "Idea List")])
-
 (defn admin-menu-view [request]
   (let [links {"business-unit" "Edit Business Units"
                "idea-category" "Edit Categories"
@@ -61,7 +48,7 @@
 ;;
 
 (defn index [request]
-  (main-layout "Home" request (index-view)))
+  (redirect "/ideas"))
 
 (defn permission-denied [request]
   (main-layout "Permission Denied"
@@ -88,17 +75,6 @@
       ["ideas" "idea-list"]
       [c a])))
 
-(defn simple-list [type properties]
-  {:paged-list (fn [filters] (if (empty? filters)
-                               (data/fetch type)
-                               (data/fetch type filters)))
-   :find-by-id (fn [id] (data/fetch-id type id))
-   :save (fn [m] (data/save m))
-   :delete-by-id (fn [id] (data/delete-id type id))
-   :visible-name (property-lookup properties type)
-   :id type
-   :properties properties})
-
 (defroutes ideadb-routes
   (autorouter route-adapter)
   
@@ -117,7 +93,7 @@
                                b))
                 "/admin"
                 (cpath "/admin/list")
-                (simple-list % properties))
+                (data/simple-list % properties))
               [:business_unit :idea_category :idea_status :idea_type]))
   
   (security-edit-user-routes "/admin" (var admin-users-layout) (fn [r] (:uri r))
