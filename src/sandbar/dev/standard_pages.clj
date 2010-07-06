@@ -21,7 +21,7 @@
         (str "Delete " (props type))
         "delete"
         "Yes - Delete it"
-        [:div (if list-item
+        [:div {:class "sandbar-confirm-delete"} (if list-item
                 [:input {:type "Hidden" :name "id" :value id}])
          [:div (str "Are you sure you want to delete the "
                     (props type)

@@ -62,10 +62,10 @@
               (= k :empty)
               (clink-to (str "/idea/delete?id=" (:id row-data)) "Delete")
               :else (or (k row-data) "")))
-      (idea-table-records-function request)))))
+      (data/idea-table-records-function request)))))
 
 (defn user-has-ideas? [request]
-  (< 0 (count ((idea-table-records-function request) :idea {} {}))))
+  (< 0 (count ((data/idea-table-records-function request) :idea {} {}))))
 
 (defn idea-list [request]
   (if (or (data/admin-role? request)
