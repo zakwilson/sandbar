@@ -16,7 +16,8 @@
         (sandbar.dev [standard-pages :only (page-not-found-404)]
                      [basic-authentication :only (basic-auth)])
         (sandbar.example.ideadb control
-                                [layouts :only (main-layout)]))
+                                [layouts :only (main-layout)])
+        (sandbar.dev [tables :only (wrap-table-js)]))
     (:require (sandbar.example.ideadb [data :as data])))
 
 (data/configure-database :development)
@@ -42,6 +43,7 @@
          wrap-params
          (wrap-file "public")
          wrap-file-info
+         (wrap-table-js "/ideas")
          (with-secure-channel security-config 8080 8443)
          wrap-stacktrace))
 

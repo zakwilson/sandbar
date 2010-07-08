@@ -22,7 +22,8 @@
         (sandbar.example.ideadb properties
                                 layouts
                                 users))
-  (:require (sandbar.example.ideadb [data :as data])))
+  (:require (sandbar.example.ideadb [data :as data]
+                                    [ideas :as ideas])))
 
 ;;
 ;; Views
@@ -74,6 +75,10 @@
     (if (= a "ideas")
       ["ideas" "idea-list"]
       [c a])))
+
+;; Build json support into the autorouter. The autorouter will route
+;; post requests to the correct location. You need a way to cause the
+;; reqpose to be json.
 
 (defroutes ideadb-routes
   (autorouter route-adapter)

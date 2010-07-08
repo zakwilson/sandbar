@@ -82,10 +82,9 @@
            (if (map? map-or-value)
              [:td (:attr map-or-value)
               (if (contains? (:actions map-or-value) :filter)
-                [:a {:href (str "?filter=" (name (:column map-or-value))
-                                "&filter-value="
-                                (url-encode (:value map-or-value)))}
-                 (:value map-or-value)]
+                (link-to-js (addFilter (name (:column map-or-value))
+                                       (url-encode (:value map-or-value)))
+                            (:value map-or-value))
                 (:value map-or-value))]
              (if (seq values)
                (vec (concat [:td map-or-value] values))
@@ -132,22 +131,19 @@
                       (partition 2 t-state))
         sort-columns (table-sort-columns column-spec)]
     [:tr (map
-          #(let [sort-dir (sort-dir-map %)]
+          #(let [sort-dir (sort-dir-map %)
+                 opp-sort-dir (name (if-let [sd (opposite-sort-dir sort-dir)]
+                                      sd
+                                      :asc))]
              (vector :th {:nowrap ""}
                      (if (contains? sort-columns %)
-                       (link-to (str "?sort-"
-                                  (name (if-let [sd (opposite-sort-dir
-                                                     sort-dir)]
-                                          sd
-                                          :asc))
-                                  "="
-                                  (name %))
-                                (props %))
+                       (link-to-js (sortColumn opp-sort-dir (name %))
+                                   (props %))
                        (props %))
-                   "&nbsp;"
-                   (cond (= sort-dir :asc) (image "sort_ascending.png")
-                         (= sort-dir :desc) (image "sort_descending.png")
-                         :else (image "blank16.gif"))))
+                     "&nbsp;"
+                     (cond (= sort-dir :asc) (image "sort_ascending.png")
+                           (= sort-dir :desc) (image "sort_descending.png")
+                           :else (image "blank16.gif"))))
           (table-column-names column-spec))]))
 
 (defn- create-saf-table-control [t-state k title link-fn data-fn]
@@ -167,18 +163,16 @@
     (conj
      [:div {:class "filter-and-sort-controls"}]
      (create-saf-table-control current-state :sort "Remove sort: "
-                               #(vector :a
-                                        {:href (str "?remove-sort=" (name %))}
-                                        ((keyword %) props %))
+                               #(link-to-js (removeSort (name %))
+                                            ((keyword %) props %))
                                #(map first (partition 2 %)))
      (create-saf-table-control current-state :filter "Remove filter: "
-                               #(vector :a
-                                        {:href
-                                         (str "?remove-filter="
-                                              (name (first%)))}
-                                        ((keyword (first %)) props (first %))
-                                        " = "
-                                        (last %))
+                               #(let [c (first %)]
+                                  (link-to-js (removeFilter (name c))
+                                              (str
+                                               ((keyword c) props c)
+                                               " = "
+                                               (last %))))
                                #(partition 2 %))))))
 
 (defn filter-and-sort-table [params t-spec column-spec cell-fn data-fn]
@@ -188,7 +182,7 @@
                             (current-filters! t-name params)
                             (current-page-and-sort! t-name params))
         columns (table-column-names column-spec)]
-    [:div {:class "filter-and-sort-table"}
+    [:div {:id t-name :class "filter-and-sort-table"}
      (create-table-sort-and-filter-controls t-name props)
      [:table {:class "list"}
       (sort-table-header t-name props column-spec)
@@ -211,3 +205,47 @@
        table-data
        (cycle ["odd" "even"]))]]))
 
+;; The current implemention works but is limited to only having on
+;; table per application. Needs to be changed to allow any number of
+;; tables per page.
+
+(defn js [table-uri]
+  (str "
+function sortColumn(dir, column) {
+  updateTable('" table-uri "?sort-' + dir + '=' + column);
+}
+
+function removeSort(column) {
+  updateTable('" table-uri "?remove-sort=' + column);
+}
+
+function addFilter(column, value) {
+  updateTable('" table-uri "?filter=' + column + '&filter-value=' + value);
+}
+
+function removeFilter(column) {
+  updateTable('" table-uri "?remove-filter=' + column);
+}
+
+function updateTable(uri) {
+  new Ajax.Request(uri, {
+    onSuccess: function(response) {
+      var data = response.responseJSON;
+      displayResults(data);
+    }
+  });
+}
+
+function displayResults(data) {
+  $(data['id']).replace(data['html']);
+}"))
+
+(defn wrap-table-js
+  [handler table-uri]
+  (fn [request]
+    (let [uri (:uri request)]
+      (if (= uri (str "/js/sandbar/tables.js"))
+        {:status 200
+         :headers {"Content-Type" "text/javascript"}
+         :body (js table-uri)} 
+        (handler request)))))

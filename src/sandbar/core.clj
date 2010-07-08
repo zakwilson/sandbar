@@ -34,6 +34,17 @@
 (defn clink-to [path title]
   (link-to (cpath path) title))
 
+(defmacro link-to-js [form title]
+  (let [function (name (first form))
+        args (rest form)]
+    `(link-to
+      (str "javascript:" ~function "("
+           (apply str
+                  (interpose ", "
+                             (map (fn [a#] (str "'" a# "'"))
+                                  [~@args])))
+           ");") ~title)))
+
 (defn redirect-301 [url]
   {:status 301
    :headers {"Location" (cpath url)}})

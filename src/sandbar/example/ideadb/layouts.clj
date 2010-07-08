@@ -38,7 +38,7 @@
          [:div "You are currently logged in as "
           [:b (current-username)] ". "
           (clink-to "/logout" "logout")])]]
-     (javascript "ideadb.js")]]))
+     (map javascript ["ideadb.js" "prototype/prototype.js"])]]))
 
 (defn main-layout [title request & body]
   (base-layout title [:div] request body))

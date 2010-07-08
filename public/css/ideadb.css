@@ -112,3 +112,8 @@ div#idea-actions a:hover {
 div.filter-and-sort-table {
    padding-top: 5px;
 }
+
+div.sandbar-confirm-delete {
+   padding-left: 10px;
+   font-size: 16px;
+}
