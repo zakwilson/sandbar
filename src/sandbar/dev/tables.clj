@@ -220,6 +220,8 @@
    :headers {"Content-Type" "application/json"}
    :body (json-str {:html table})})
 
+;; Use Scriptjure for generating javascript.
+
 (defmulti js-ajax (fn [js-lib _ _] js-lib))
 
 (defmethod js-ajax :prototype [js-lib qualifier table-id]
