@@ -34,11 +34,16 @@
 (defn clink-to [path title]
   (link-to (cpath path) title))
 
-(defmacro link-to-js [form title]
-  (let [function (name (first form))
+(defmacro link-to-js [& args]
+  (let [[form title qualifier] args
+        function (str (name (first form)))
         args (rest form)]
     `(link-to
-      (str "javascript:" ~function "("
+      (str "javascript:"
+           ~function
+           (when ~qualifier
+             (str "_" (.replaceAll (name ~qualifier) "-" "_")))
+           "("
            (apply str
                   (interpose ", "
                              (map (fn [a#] (str "'" a# "'"))

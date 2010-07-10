@@ -43,7 +43,7 @@
          wrap-params
          (wrap-file "public")
          wrap-file-info
-         (wrap-table-js "/ideas")
+         (wrap-table-js {:idea-table "/ideas"} :prototype)
          (with-secure-channel security-config 8080 8443)
          wrap-stacktrace))
 

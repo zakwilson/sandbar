@@ -56,59 +56,56 @@
   {:table-state {:test-table s}})
 
 (deftest test-update-table-state!
-  (t "update table state sort state"
-     (t "when adding sort to initially empty state"
-        (binding [*sandbar-session* (atom {})]
-          (is (= (update-table-state! :test-table
-                                      {"sort-asc" "a"})
-                 {:sort [:a :asc] :filter []}))))
-     (t "when changing the direction of an existing sort"
-        (binding [*sandbar-session* (atom (test-table-state {:sort [:a :asc]}))]
-          (is (= (update-table-state! :test-table
-                                      {"sort-desc" "a"})
-                 {:sort [:a :desc] :filter []}))))
-     (t "when adding multiple sorts at the same time"
-        (binding [*sandbar-session* (atom (test-table-state {:sort [:a :asc]}))]
-          (is (= (update-table-state!
-                  :test-table
-                  {"sort-asc" "b" "sort-desc" "c"})
-                 {:sort [:a :asc :b :asc :c :desc] :filter []}))))
-     (t "when adding a new sort to an existing sort"
-        (binding [*sandbar-session* (atom (test-table-state {:sort [:b :asc]}))]
-          (is (= (update-table-state! :test-table
-                                      {"sort-desc" "a"})
-                 {:sort [:b :asc :a :desc] :filter []}))))
-     (t "when removing an existing sort"
-        (binding [*sandbar-session* (atom (test-table-state
-                                     {:sort [:b :asc :a :asc]}))]
-          (is (= (update-table-state! :test-table
-                                      {"remove-sort" "a"})
-                 {:sort [:b :asc] :filter []})))))
-  (t "update table filter state"
-     (t "when adding filter to initially empty state"
-        (binding [*sandbar-session* (atom {})]
-          (is (= (update-table-state!
-                  :test-table
-                  {"filter" "a" "filter-value" "v-a"})
-                 {:sort [] :filter [:a "v-a"]}))))
-     (t "when changing the value of a filter"
-        (binding [*sandbar-session* (atom (test-table-state {:filter [:a "v-a"]}))]
-          (is (= (update-table-state!
-                  :test-table
-                  {"filter" "a" "filter-value" "v-b"})
-                 {:sort [] :filter [:a "v-b"]}))))
-     (t "when adding a new filter to an existing filter"
-        (binding [*sandbar-session* (atom (test-table-state {:filter [:b "v-b"]}))]
-          (is (= (update-table-state!
-                  :test-table
-                  {"filter" "a" "filter-value" "v-a"})
-                 {:sort [] :filter [:b "v-b" :a "v-a"]}))))
-     (t "when removing an existing filter"
-        (binding [*sandbar-session* (atom (test-table-state
-                                     {:filter [:b "v-b" :a "v-a"]}))]
-          (is (= (update-table-state! :test-table
-                                      {"remove-filter" "a"})
-                 {:sort [] :filter [:b "v-b"]}))))))
+  (binding [*table-id* :test-table]
+    (t "update table state sort state"
+      (t "when adding sort to initially empty state"
+         (binding [*sandbar-session* (atom {})]
+           (is (= (update-table-state! {"sort-asc" "a"})
+                  {:sort [:a :asc] :filter []}))))
+      (t "when changing the direction of an existing sort"
+         (binding [*sandbar-session*
+                   (atom (test-table-state {:sort [:a :asc]}))]
+           (is (= (update-table-state! {"sort-desc" "a"})
+                  {:sort [:a :desc] :filter []}))))
+      (t "when adding multiple sorts at the same time"
+         (binding [*sandbar-session*
+                   (atom (test-table-state {:sort [:a :asc]}))]
+           (is (= (update-table-state!
+                   {"sort-asc" "b" "sort-desc" "c"})
+                  {:sort [:a :asc :b :asc :c :desc] :filter []}))))
+      (t "when adding a new sort to an existing sort"
+         (binding [*sandbar-session*
+                   (atom (test-table-state {:sort [:b :asc]}))]
+           (is (= (update-table-state! {"sort-desc" "a"})
+                  {:sort [:b :asc :a :desc] :filter []}))))
+      (t "when removing an existing sort"
+         (binding [*sandbar-session* (atom (test-table-state
+                                            {:sort [:b :asc :a :asc]}))]
+           (is (= (update-table-state! {"remove-sort" "a"})
+                  {:sort [:b :asc] :filter []})))))
+    (t "update table filter state"
+       (t "when adding filter to initially empty state"
+          (binding [*sandbar-session* (atom {})]
+            (is (= (update-table-state!
+                    {"filter" "a" "filter-value" "v-a"})
+                   {:sort [] :filter [:a "v-a"]}))))
+       (t "when changing the value of a filter"
+          (binding [*sandbar-session*
+                    (atom (test-table-state {:filter [:a "v-a"]}))]
+            (is (= (update-table-state!
+                    {"filter" "a" "filter-value" "v-b"})
+                   {:sort [] :filter [:a "v-b"]}))))
+       (t "when adding a new filter to an existing filter"
+          (binding [*sandbar-session*
+                    (atom (test-table-state {:filter [:b "v-b"]}))]
+            (is (= (update-table-state!
+                    {"filter" "a" "filter-value" "v-a"})
+                   {:sort [] :filter [:b "v-b" :a "v-a"]}))))
+       (t "when removing an existing filter"
+          (binding [*sandbar-session* (atom (test-table-state
+                                             {:filter [:b "v-b" :a "v-a"]}))]
+            (is (= (update-table-state! {"remove-filter" "a"})
+                   {:sort [] :filter [:b "v-b"]})))))))
 
 (deftest test-build-page-and-sort-map
   (is (= (build-page-and-sort-map {:sort [:a :asc :b :desc]})
@@ -119,49 +116,85 @@
          {:a "v-a" :b "v-b"})))
 
 (deftest test-current-page-and-sort!
-  (binding [*sandbar-session* (atom (test-table-state {:sort [:b :asc]}))]
-    (is (= (current-page-and-sort! :test-table {"sort-desc" "a"})
+  (binding [*table-id* :test-table
+            *sandbar-session* (atom (test-table-state {:sort [:b :asc]}))]
+    (is (= (current-page-and-sort! {"sort-desc" "a"})
            {:sort [:asc "b" :desc "a"]}))))
 
 (deftest test-create-table-sort-and-filter-controls
-  (binding [*sandbar-session* (atom (test-table-state {:sort [:a :asc]
-                                               :filter [:b "v-b"]}) )]
-    (is (= (create-table-sort-and-filter-controls
-            :test-table
-            {})
+  (binding [*table-id* :test-table
+            *sandbar-session* (atom (test-table-state {:sort [:a :asc]
+                                                       :filter [:b "v-b"]}) )]
+    (is (= (create-table-sort-and-filter-controls {})
            [:div {:class "filter-and-sort-controls"}
             [:div "Remove sort: "
-             [:a {:href "?remove-sort=a"} :a]]
+             [:a {:href "javascript:removeSort_test_table('a');"} [:a]]]
             [:div "Remove filter: "
-             [:a {:href "?remove-filter=b"} :b " = " "v-b"]]]))))
+             [:a {:href "javascript:removeFilter_test_table('b');"}
+              [":b = v-b"]]]]))))
 
 (deftest test-table-cell
-  (t "create table cell"
-     (t "with just a value"
-        (is (= (table-cell "v")
-               [:td "v"])))
-     (t "with a value and attributes"
-        (is (= (table-cell {:attr {:class "c"} :value "v"})
-               [:td {:class "c"} "v"])))
-     (t "with a nil value"
-        (is (= (table-cell nil)
-               [:td])))
-     (t "with a filter"
-        (is (= (table-cell {:value "v"
-                            :actions #{:filter} :column :x})
-               [:td [:a {:href "?filter=x&filter-value=v"} "v"]])))
-     (t "with a filter and attributes"
-        (is (= (table-cell {:value "v" :attr {:class "c"}
-                            :actions #{:filter} :column :x})
-               [:td {:class "c"}
-                [:a {:href "?filter=x&filter-value=v"} "v"]])))
-     (t "with multiple values"
-        (is (= (table-cell "v1" "v2" "v3")
-               [:td "v1" "v2" "v3"])))
-     (t "with multiple values one of which is nil"
-        (is (= (table-cell "v1" nil "v3")
-               [:td "v1" "v3"])))))
+  (binding [*table-id* :a]
+    (t "create table cell"
+      (t "with just a value"
+         (is (= (table-cell "v")
+                [:td "v"])))
+      (t "with a value and attributes"
+         (is (= (table-cell {:attr {:class "c"} :value "v"})
+                [:td {:class "c"} "v"])))
+      (t "with a nil value"
+         (is (= (table-cell nil)
+                [:td])))
+      (t "with a filter"
+         (is (= (table-cell {:value "v"
+                             :actions #{:filter} :column :x})
+                [:td [:a {:href "javascript:addFilter_a('x', 'v');"} ["v"]]])))
+      (t "with a filter and attributes"
+         (is (= (table-cell {:value "v" :attr {:class "c"}
+                             :actions #{:filter} :column :x})
+                [:td {:class "c"}
+                 [:a {:href "javascript:addFilter_a('x', 'v');"} ["v"]]])))
+      (t "with multiple values"
+         (is (= (table-cell "v1" "v2" "v3")
+                [:td "v1" "v2" "v3"])))
+      (t "with multiple values one of which is nil"
+         (is (= (table-cell "v1" nil "v3")
+                [:td "v1" "v3"]))))))
 
+(def table-javascript
+     "
+function sortColumn_test_table(dir, column) {
+  updateTable_test_table('/ideas?sort-' + dir + '=' + column);
+}
+
+function removeSort_test_table(column) {
+  updateTable_test_table('/ideas?remove-sort=' + column);
+}
+
+function addFilter_test_table(column, value) {
+  updateTable_test_table('/ideas?filter=' + column + '&filter-value=' + value);
+}
+
+function removeFilter_test_table(column) {
+  updateTable_test_table('/ideas?remove-filter=' + column);
+}
+
+function updateTable_test_table(uri) {
+  new Ajax.Request(uri, {
+    onSuccess: function(response) {
+      var data = response.responseJSON;
+      displayResults_test_table(data);
+    }
+  });
+}
+
+function displayResults_test_table(data) {
+  $('test-table').replace(data['html']);
+}")
+
+(deftest test-js
+  (is (= (js "test-table" "/ideas" :prototype)
+         table-javascript)))
 
 
 

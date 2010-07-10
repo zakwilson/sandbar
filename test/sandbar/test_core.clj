@@ -11,6 +11,18 @@
         (sandbar core
                  test)))
 
+(deftest test-link-to-js
+  (t "link-to-js"
+     (t "with two arguments"
+        (is (= (link-to-js (f "x") "y")
+               [:a {:href "javascript:f('x');"} ["y"]])))
+     (t "with three arguments"
+        (is (= (link-to-js (f "x") "y" :i)
+               [:a {:href "javascript:f_i('x');"} ["y"]])))
+     (t "with hyphen in qualifier"
+        (is (= (link-to-js (f "x") "y" :i-m)
+               [:a {:href "javascript:f_i_m('x');"} ["y"]])))))
+
 (deftest test-append-to-redirect-loc
   (t "append to redirect location"
      (binding [app-context (atom "")]

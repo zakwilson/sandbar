@@ -9,7 +9,6 @@
 (ns sandbar.example.ideadb.ideas
   (:require [sandbar.example.ideadb.data :as data])
   (:use (hiccup core)
-        (clojure.contrib.json (write :only (json-str)))
         (ring.util [response :only (redirect)])
         (sandbar core
                  [auth :only (current-username
@@ -47,27 +46,26 @@
 (defn idea-table [request]
   (let [admin (data/admin-role? request)]
     (filter-and-sort-table
-    (:params request)
-    {:type :idea :name :idea-table :props properties}
-    (if admin 
-      (conj idea-table-columns :empty)
-      idea-table-columns)
-    (fn [k row-data]
-      (cond (= k :name)
-            (if admin
-              (clink-to (str "/idea/edit?id=" (:id row-data))
-                        (:name row-data))
-              (:name row-data))
-            (= k :empty)
-            (clink-to (str "/idea/delete?id=" (:id row-data)) "Delete")
-            :else (or (k row-data) "")))
-    (data/idea-table-records-function request))))
+     (:params request)
+     {:type :idea :name :idea-table :props properties}
+     (if admin 
+       (conj idea-table-columns :empty)
+       idea-table-columns)
+     (fn [k row-data]
+       (cond (= k :name)
+             (if admin
+               (clink-to (str "/idea/edit?id=" (:id row-data))
+                         (:name row-data))
+               (:name row-data))
+             (= k :empty)
+             (clink-to (str "/idea/delete?id=" (:id row-data)) "Delete")
+             :else (or (k row-data) "")))
+     (data/idea-table-records-function request))))
 
 (defn idea-list-view [request]
   (generate-welcome-message request)
   (html
-   (idea-table request)
-   (javascript "sandbar/tables.js")))
+   (idea-table request)))
 
 (defn user-has-ideas? [request]
   (< 0 (count ((data/idea-table-records-function request) :idea {} {}))))
@@ -81,10 +79,7 @@
     (redirect (cpath "/idea/new"))))
 
 (defn idea-list-post [request]
-  {:status 200
-   :headers {"Content-Type" "application/json"}
-   :body (json-str {:id :idea-table
-                    :html (html (idea-table request))})})
+  (table-as-json (html (idea-table request))))
 
 (defn idea-download-view []
   (let [data (data/fetch :idea)
