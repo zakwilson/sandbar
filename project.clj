@@ -13,7 +13,7 @@
                      [ring/ring-httpcore-adapter "0.2.3"]
                      [mysql/mysql-connector-java "5.1.6"]
                      [carte/carte "0.1.2"]
-                     [deview/lein-deview "1.0.1"]]
+                     [deview/lein-deview "1.0.4"]]
   :namespaces [sandbar.test
                sandbar.util
                sandbar.core
@@ -28,4 +28,5 @@
                sandbar.dev.stats
                sandbar.dev.user-manager
                sandbar.dev.validation]
-  :deview-server 9001)
+  :deview-server 9001
+  :deview-loc-ext #{"clj" "js" "css" "xml"})

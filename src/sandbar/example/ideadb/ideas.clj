@@ -36,7 +36,6 @@
       {:column :business_unit :actions #{:sort :filter}} 
       {:column :status :actions #{:sort :filter}}])
 
-
 (defn generate-welcome-message [request]
   (if (not (data/admin-role? request))
     [:div {:id "welcome-message"}
