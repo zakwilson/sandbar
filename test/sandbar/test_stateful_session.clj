@@ -7,6 +7,7 @@
 ;; You must not remove this notice, or any other, from this software.
 
 (ns sandbar.test-stateful-session
+  (:require ring.middleware.flash)
   (:use (clojure test)
         (sandbar stateful-session
                  [test :only (t)])))
@@ -100,6 +101,26 @@
                  (fn [r] (do (session-delete-key! :a)
                              {})))
                 {:session {session-key {:a "a"}}})
+               {:session nil})))
+     (t "session-delete-key! causes session to be deleted when it is empty, when combined with wrap-flash"
+        (is (= ((wrap-stateful-session*
+                 (ring.middleware.flash/wrap-flash
+                  (fn [r] (do (session-delete-key! :a)
+                              {}))))
+                {:session {session-key {:a "a"}}})
+               {:session nil})))
+     (t "destroy-session! works"
+        (is (= ((wrap-stateful-session*
+                 (fn [r] (do (destroy-session!)
+                             {})))
+                {:session {session-key {:a "a" :b "b"}}})
+               {:session nil})))
+     (t "destroy-session! works when combined with wrap-flash"
+        (is (= ((wrap-stateful-session*
+                 (ring.middleware.flash/wrap-flash
+                  (fn [r] (do (destroy-session!)
+                              {}))))
+                {:session {session-key {:a "a" :b "b"}}})
                {:session nil})))
      (t "response values DO NOT override existing session values"
         (is (= ((wrap-stateful-session*

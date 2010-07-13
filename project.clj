@@ -13,7 +13,7 @@
                      [ring/ring-httpcore-adapter "0.2.3"]
                      [mysql/mysql-connector-java "5.1.6"]
                      [carte/carte "0.1.2"]
-                     [deview/lein-deview "1.0.4"]]
+                     [deview/lein-deview "1.0.5"]]
   :namespaces [sandbar.test
                sandbar.util
                sandbar.core
