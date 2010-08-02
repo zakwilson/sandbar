@@ -268,3 +268,20 @@ function removeFilter_" q "(column) {
            :headers {"Content-Type" "text/javascript"}
            :body (js table-id ((keyword table-id) js-uri-map) js-lib)})
         (handler request)))))
+
+(defn carte-table-adapter
+  "Transform filter and sort information from a filter-and-sort table into
+   a query that carte can understand."
+  [table filters sort-and-page]
+  (let [query [table]
+        query (if (empty? filters) query (conj query filters))
+        query (if (or (empty? sort-and-page)
+                      (empty? (:sort sort-and-page)))
+                query
+                (vec
+                 (concat query
+                         [:order-by]
+                         (map #(let [[field dir] (reverse %)]
+                                 [(keyword field) dir])
+                              (partition 2 (:sort sort-and-page))))))]
+    query))

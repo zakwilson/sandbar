@@ -7,7 +7,8 @@
 ;; You must not remove this notice, or any other, from this software.
 
 (ns sandbar.example.ideadb.users
-  (:require [sandbar.example.ideadb.data :as data])
+  (:require [sandbar.example.ideadb.data :as data]
+            [sandbar.dev [tables :as tables]])
   (:use (sandbar core util)
         (sandbar.dev forms user-manager)
         (sandbar.example.ideadb properties)))
@@ -24,10 +25,9 @@
           ([type]
              (data/fetch type))
           ([type filters sort-and-page]
-             (println "TODO - Implement sorting for users:" sort-and-page)
-             (cond (empty? filters) (data/fetch type)
-                   :else (data/fetch type filters))))
-        
+             (apply data/fetch (tables/carte-table-adapter type
+                                                           filters
+                                                           sort-and-page))))
         (= k :lookup)
         (fn [type id]
           (if (= :app_user type)

@@ -8,6 +8,7 @@
 
 (ns sandbar.dev.user-manager
   (:use (ring.util [response :only (redirect)])
+        (hiccup core)
         (compojure core)
         (sandbar core
                  util
@@ -38,20 +39,23 @@
       {:column :email :actions #{:sort}}
       :empty])
 
+(defn user-table [props load-fn request]
+  (filter-and-sort-table
+   (:params request)
+   {:type :app_user :name :user-table :props props}
+   user-table-columns 
+   (fn [k row-data]
+     (cond (= k :empty)
+           [:div
+            (clink-to (str "edit?id=" (:id row-data)) "Edit") ", "
+            (clink-to (str "delete?id=" (:id row-data)) "Delete")]
+           :else (k row-data)))
+   load-fn))
+
 (defn user-list-page [props load-fn request]
   [:div
    [:div (clink-to "new" "Add new User")]
-   (filter-and-sort-table
-    (:params request)
-     {:type :app_user :name :user-table :props props}
-     user-table-columns 
-     (fn [k row-data]
-       (cond (= k :empty)
-             [:div
-              (clink-to (str "edit?id=" (:id row-data)) "Edit") ", "
-              (clink-to (str "delete?id=" (:id row-data)) "Delete")]
-             :else (k row-data)))
-     load-fn)])
+   (user-table props load-fn request)])
 
 (defn user-form-fields [load-fn props]
   [(form-textfield props :username :required)
@@ -156,6 +160,8 @@
         (layout (name-fn request)
                 request
                 (user-list-page props (data-fns :load) request)))
+   (POST (str path-prefix "/user/list*") request
+         (table-as-json (html (user-table props (data-fns :load) request))))
    (GET (str path-prefix "/user/new*") request
         (layout (name-fn request)
                 request
