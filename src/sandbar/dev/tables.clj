@@ -213,7 +213,9 @@
                        class))
           table-data
           (cycle ["odd" "even"])))]
-       (javascript (str "sandbar/table/" (name *table-id*) ".js"))])))
+       (include-js (str (cpath "/js/sandbar/table/")
+                        (name *table-id*)
+                        ".js"))])))
 
 (defn table-as-json [table]
   {:status 200
