@@ -39,25 +39,29 @@
       :password-validation-error "Enter a password!"})
 
 ;;
-;; Implement User Model
-;; =======================
-;; Create a map with funcitons to load your user data and
-;; validate the user's password.
+;; Implement BasicAuthAdapter
+;; ==========================
+;;
 
-(def login-user-model
-     {:load-login-user
-      (fn [username password]
-        (let [login {:username username :password password}]
-          (cond (= username "member")
-                (merge login {:roles #{:member}})
-                (= username "admin")
-                (merge login {:roles #{:admin}})
-                :else login)))
-      :validate-password
-      (fn [m]
-        (if (= (:password m) (:username m))
-          m
-          (add-validation-error m "Incorrect username or password!")))})
+(defrecord DemoAdapter []
+  BasicAuthAdapter
+  (load-user
+   [this username password]
+   (let [login {:username username :password password}]
+     (cond (= username "member")
+           (merge login {:roles #{:member}})
+           (= username "admin")
+           (merge login {:roles #{:admin}})
+           :else login)))
+  (validate-password
+   [this]
+   (fn [m]
+     (if (= (:password m) (:username m))
+       m
+       (add-validation-error m "Incorrect username or password!")))))
+
+(defn basic-auth-adapter []
+  (merge (DemoAdapter.) properties))
 
 ;;
 ;; Routes
@@ -73,7 +77,8 @@
   (GET "/member*" [] (layout (member-view)))
   (GET "/admin*" [] (layout (admin-view)))
   (GET "/permission-denied*" [] (layout (permission-denied-view)))
-  (basic-auth-routes (fn [r c] (layout c)) properties login-user-model)
+  (basic-auth-routes (fn [r c] (layout c))
+                     (basic-auth-adapter))
   (ANY "*" [] (layout (home-view))))
 
 ;;

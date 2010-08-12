@@ -9,6 +9,7 @@
 (ns sandbar.example.ideadb.test-data
   (:use (clojure test)
         (sandbar [test :only (t)])
+        (sandbar.dev tables)
         (sandbar.example.ideadb data)))
 
 (deftest test-carte-table-adapter

@@ -28,59 +28,59 @@
            :else {})))
 
 (deftest test-login-validator
-  (is (= ((login-validator (user-model test-login-load-fn) {}) {:username "u"})
-         {:_validation-errors {:password ["password cannot be blank!"]}
-          :username "u"}))
-  (is (= ((login-validator (user-model test-login-load-fn) {})
-          {:password "test"})
-         {:_validation-errors {:username ["username cannot be blank!"]}
-          :password "test"}))
-  (is (= ((login-validator (user-model test-login-load-fn) {})
-          {:username "u" :password "testing" :salt "cfjhuy"})
-         {:_validation-errors {:form ["Incorrect username or password!"]}
-          :username "u" :password "testing" :salt "cfjhuy"}))
-  (is (= ((login-validator (user-model test-login-load-fn) {})
-          {:username "u" :password "test" :salt "cfjhuy"
-           :password-hash (hash-password "test" "cfjhuy")})
-         {:username "u" :password "test" :salt "cfjhuy"
-          :password-hash (hash-password "test" "cfjhuy")}))
-  (is (= ((login-validator (user-model test-login-load-fn) {})
-          {:username "x" :password "test"})
-         {:_validation-errors {:form ["Incorrect username or password!"]}
-          :username "x" :password "test"})))
+  (let [auth-source (basic-auth-adapter test-login-load-fn {})]
+    (is (= ((login-validator auth-source)
+            {:username "u"})
+           {:_validation-errors {:password ["password cannot be blank!"]}
+            :username "u"}))
+    (is (= ((login-validator auth-source)
+            {:password "test"})
+           {:_validation-errors {:username ["username cannot be blank!"]}
+            :password "test"}))
+    (is (= ((login-validator auth-source)
+            {:username "u" :password "testing" :salt "cfjhuy"})
+           {:_validation-errors {:form ["Incorrect username or password!"]}
+            :username "u" :password "testing" :salt "cfjhuy"}))
+    (is (= ((login-validator auth-source)
+            {:username "u" :password "test" :salt "cfjhuy"
+             :password-hash (hash-password "test" "cfjhuy")})
+           {:username "u" :password "test" :salt "cfjhuy"
+            :password-hash (hash-password "test" "cfjhuy")}))
+    (is (= ((login-validator auth-source)
+            {:username "x" :password "test"})
+           {:_validation-errors {:form ["Incorrect username or password!"]}
+            :username "x" :password "test"}))))
+
 
 (deftest test-authenticate!
-  (t "authenticate!"
-     (binding [*sandbar-session* (atom {})]
-       (t "with missing username"
-          (is (= (authenticate! (user-model test-login-load-fn) 
-                                {}
-                                {"password" "x"})
-                 (redirect "login"))))
-       (t "with missing password"
-        (is (= (authenticate! (user-model test-login-load-fn) 
-                              {}
-                              {"username" "u"})
-               (redirect "login")))))
-     (t "with correct password"
-        (binding [*sandbar-session* (atom {:auth-redirect-uri "/test"})]
-          (let [result (authenticate! (user-model test-login-load-fn) 
-                                      {}
-                                      {"username" "u" "password" "test"})]
-            (is (= result
-                   (redirect "/test")))
-            (is (= @*sandbar-session*
-                   {:current-user {:name "u"
-                                   :roles #{:admin}}})))))
-     (t "with incorrect password"
-        (binding [*sandbar-session* (atom {:auth-redirect-uri "/test"})]
-          (let [result (authenticate! (user-model test-login-load-fn) 
-                                      {}
-                                      {"username" "u" "password" "wrong"})]
-            (is (= result
-                   (redirect "login")))
-            (is (= (:auth-redirect-uri @*sandbar-session*)
-                   "/test")))))))
+  (let [auth-source (basic-auth-adapter test-login-load-fn {})]
+    (t "authenticate!"
+       (binding [*sandbar-session* (atom {})]
+         (t "with missing username"
+            (is (= (authenticate! auth-source
+                                  {"password" "x"})
+                   (redirect "login"))))
+        (t "with missing password"
+           (is (= (authenticate! auth-source
+                                 {"username" "u"})
+                  (redirect "login")))))
+      (t "with correct password"
+         (binding [*sandbar-session* (atom {:auth-redirect-uri "/test"})]
+           (let [result (authenticate! auth-source
+                                       {"username" "u" "password" "test"})]
+             (is (= result
+                    (redirect "/test")))
+             (is (= @*sandbar-session*
+                    {:current-user {:name "u"
+                                    :roles #{:admin}}})))))
+      (t "with incorrect password"
+         (binding [*sandbar-session* (atom {:auth-redirect-uri "/test"})]
+           (let [result (authenticate! auth-source
+                                       {"username" "u" "password" "wrong"})]
+             (is (= result
+                    (redirect "login")))
+             (is (= (:auth-redirect-uri @*sandbar-session*)
+                    "/test"))))))))
 
 (deftest test-with-security-with-basic-auth
   (binding [*sandbar-session* (atom {})]

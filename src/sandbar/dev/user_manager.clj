@@ -126,28 +126,33 @@
 ;; ================================
 ;;
 
-(defn user-model [load-fn]
-  {:load-login-user
-   (fn [username password]
-     (let [user (first (load-fn :app_user
-                                {:username username} {}))
-           roles (index-by :id (load-fn :role))]
-       (-> {:username username :password password}
-           (assoc :password-hash (:password user))
-           (assoc :salt (:salt user))
-           (assoc :roles (set
-                          (map #(keyword (:name (roles %)))
-                               (map :role_id
-                                    (load-fn :user_role
-                                             {:user_id (:id user)} {}))))))))
-   :validate-password
+(defrecord DefaultBasicAuthAdapter [load-fn]
+  BasicAuthAdapter
+  (load-user
+   [this username password]
+   (let [user (first (load-fn :app_user
+                              {:username username} {}))
+         roles (index-by :id (load-fn :role))]
+     (-> {:username username :password password}
+         (assoc :password-hash (:password user))
+         (assoc :salt (:salt user))
+         (assoc :roles (set
+                        (map #(keyword (:name (roles %)))
+                             (map :role_id
+                                  (load-fn :user_role
+                                           {:user_id (:id user)} {}))))))))
+  (validate-password
+   [this]
    (fn [m]
      (if (and (:salt m)
               (:password-hash m)
               (= (hash-password (:password m) (:salt m))
                  (:password-hash m)))
        m
-       (add-validation-error m "Incorrect username or password!")))})
+       (add-validation-error m "Incorrect username or password!")))))
+
+(defn basic-auth-adapter [load-fn props]
+  (merge (DefaultBasicAuthAdapter. load-fn) props))
 
 ;;
 ;; Routes

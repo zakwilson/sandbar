@@ -105,4 +105,5 @@
                              properties user-data-functions)
   
   (basic-auth-routes (fn [r & b] (main-layout "Login" r b)) 
-                     properties (user-model (user-data-functions :load))))
+                     (basic-auth-adapter (user-data-functions :load)
+                                         properties)))
