@@ -6,10 +6,10 @@
 ;; the terms of this license.
 ;; You must not remove this notice, or any other, from this software.
 
-(ns sandbar.dev.test-validation
+(ns sandbar.test-validation
   (:use (clojure test)
-        (sandbar [test :only (t)])
-        (sandbar.dev validation)))
+        (sandbar validation
+                 [test :only (t)])))
 
 (deftest test-add-validation-errors
   (t "add validation error"

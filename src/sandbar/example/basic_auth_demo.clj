@@ -13,8 +13,8 @@
         (ring.middleware params file file-info)
         (compojure core)
         (hiccup core page-helpers)
-        (sandbar core stateful-session auth)
-        (sandbar.dev basic-authentication validation)
+        (sandbar core stateful-session auth
+                 basic-authentication validation)
         (sandbar.example [auth-demo :only (load-data-from
                                            layout
                                            home-view admin-view member-view

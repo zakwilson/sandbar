@@ -6,7 +6,7 @@
 ;; the terms of this license.
 ;; You must not remove this notice, or any other, from this software.
 
-(ns sandbar.dev.validation
+(ns sandbar.validation
   (:use (sandbar [core :only (property-lookup)]
                  [util :only (append-to-keyword)])))
 

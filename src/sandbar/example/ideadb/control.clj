@@ -13,11 +13,11 @@
                  [core :only (cpath
                               clink-to
                               property-lookup)]
-                 util)
+                 util
+                                      basic-authentication)
         (sandbar.dev user-manager
                      standard-pages
                      list-manager
-                     basic-authentication
                      autorouter)
         (sandbar.example.ideadb properties
                                 layouts

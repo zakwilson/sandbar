@@ -13,10 +13,12 @@
         (sandbar core
                  util
                  stateful-session
+                 validation
+                 basic-authentication
                  [auth :only (hash-password)])
-        (sandbar.dev forms tables 
-                     standard-pages validation
-                     basic-authentication)))
+        (sandbar.dev forms
+                     tables 
+                     standard-pages)))
 
 (defn secure-user
   "Ensure that the user has a salt value associated with it and that if the

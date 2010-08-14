@@ -15,8 +15,9 @@
                               current-user-roles
                               any-role-granted?)]
                  stateful-session
-                 util)
-        (sandbar.dev tables forms validation standard-pages)
+                 util
+                 validation)
+        (sandbar.dev tables forms standard-pages)
         (sandbar.example.ideadb properties layouts)))
 
 ;;

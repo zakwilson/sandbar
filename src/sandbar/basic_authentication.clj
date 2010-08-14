@@ -6,7 +6,7 @@
 ;; the terms of this license.
 ;; You must not remove this notice, or any other, from this software.
 
-(ns sandbar.dev.basic-authentication
+(ns sandbar.basic-authentication
   "Provide support for form based authentication."
   (:use (compojure core)
         (ring.util [response :only (redirect)])
@@ -15,16 +15,16 @@
                                           session-put!
                                           set-flash-value!
                                           session-delete-key!)]
-                 [core :only (property-lookup)])
+                 [core :only (property-lookup)]
+                 [validation :only (build-validator
+                                        non-empty-string
+                                        if-valid)])
         (sandbar.dev [forms :only (form-layout-grid
                                    form-textfield
                                    form-password
                                    login-form
                                    get-params
-                                   store-errors-and-redirect)]
-                     [validation :only (build-validator
-                                        non-empty-string
-                                        if-valid)])))
+                                   store-errors-and-redirect)])))
 
 (defprotocol BasicAuthAdapter
   "Protocol for processing basic authenticaion credentials."
