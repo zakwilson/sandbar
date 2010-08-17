@@ -56,8 +56,15 @@
                                      action)
         :else false))
 
-(defn uri-seq [request]
-  (filter #(not (empty? %)) (re-split #"/" (:uri request))))
+(defn uri-seq
+  ([request]
+	(uri-seq request #{})) 
+  ([request ignore-prefix-coll]
+    (if-let [uri (:uri request)]
+	  (let [matching-prefix (first (filter #(.startsWith uri %) ignore-prefix-coll))
+		    uri (if matching-prefix (subs uri (count matching-prefix)) uri)]
+		(filter #(not (empty? %)) (re-split #"/" uri)))
+	  [])))
 
 (defn query-part [request controller action]
   (let [path (uri-seq request)]
@@ -65,12 +72,12 @@
           (or controller action) (drop 1 path)
           :else "")))
 
-;; TODO 1) Configure a path prefix
-;;      2) Maybe add a thread local var which contains path
+;; TODO 
+;;      1) Maybe add a thread local var which contains path
 ;;         information so that you can create functions that can
 ;;         easily link to the same controller and other controllers.
-;;      3) Configure if :reload should be used
-;;      4) How do we deal with layouts
+;;      2) Configure if :reload should be used
+;;      3) How do we deal with layouts
 (defn autorouter
   "Dynamically find an action based on the URI. The action must be a function
    of the request. For example, the URI /edit will look for a function named
@@ -80,13 +87,15 @@
    com.company. This function will automatically deal with HEAD and TRACE
    requests (not implemented), you must provide you own implementaions for
    GET, POST, PUT and DELETE. If a GET request is /user/edit then it will look
-   for a function named edit. If another request method is user it will look
+   for a function named edit. If another request method is used it will look
    for edit-post, edit-put, edit-delete."
-  [route-adapter]
-  (let [ns *ns*]
-    (routes
-     (ANY "*" request
-          (let [path (uri-seq request)
+  ([route-adapter]
+	(autorouter route-adapter []))
+  ([route-adapter ignore-prefix-coll]
+    (let [ns *ns*]
+      (routes
+       (ANY "*" request
+          (let [path (uri-seq request ignore-prefix-coll)
                 request-method (:request-method request)
                 action-suffix (if (= request-method :get)
                                 ""
@@ -104,4 +113,4 @@
                                                             action)})))
                   (if controller
                     nil
-                    (recur action (first params) (rest params)))))))))))
+                    (recur action (first params) (rest params))))))))))))
