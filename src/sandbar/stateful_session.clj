@@ -8,23 +8,29 @@
 
 (ns sandbar.stateful-session
   "Middleware for working with 'stateful' sessions."
-  (:use (ring.middleware session)))
+  (:use (ring.middleware flash session)))
 
 (declare *sandbar-session*)
+(declare *sandbar-flash*)
 
 (defn wrap-stateful-session*
   "Add stateful sessions to a ring handler. Does not modify the functional
    behavior of ring sessions except that returning nil will not remove
    the session if you have stateful data. Creates a separate namespace
    for stateful session keys so that user code and library code will not
-   interfere with one another."
+   interfere with one another. Also adds map style flash support backed by
+   Ring's flash middleware."
   [handler]
   (fn [request]
     (binding [*sandbar-session* (atom
-                                 (-> request :session ::session))]
+                                 (-> request :session ::session))
+              *sandbar-flash* (atom
+                               {:incoming (-> request :flash)})]
       (let [request (update-in request [:session] dissoc ::session)
             response (handler request)
             sandbar-session @*sandbar-session*
+            outgoing-flash (merge (:outgoing @*sandbar-flash*)
+                                  (:flash response))
             sandbar-session (if (empty? sandbar-session)
                               nil
                               sandbar-session)
@@ -37,15 +43,19 @@
                       (assoc session ::session sandbar-session)
                       session)]
         (when response
-          (if (nil? session)
-            (dissoc response :session)
-            (if (empty? session)
-              (merge response {:session nil})
-              (merge response {:session session}))))))))
+          (let [response (if (nil? session)
+                           (dissoc response :session)
+                           (if (empty? session)
+                             (merge response {:session nil})
+                             (merge response {:session session})))]
+            (if outgoing-flash
+              (assoc response :flash outgoing-flash)
+              response)))))))
 
 (defn wrap-stateful-session [handler]
   (wrap-session
-   (wrap-stateful-session* handler)))
+   (wrap-flash
+    (wrap-stateful-session* handler))))
 
 (defn update-session! [update-fn value]
   (swap! *sandbar-session* update-fn value))
@@ -65,10 +75,19 @@
 (defn destroy-session! []
   (swap! *sandbar-session* (constantly nil)))
 
-(defn set-flash-value! [k v]
-  (session-put! k v))
+(defn set-flash-value!
+  "Add a value to the flash in such a way that it is available in both
+   this request and the next."
+  [k v]
+  (swap! *sandbar-flash* (fn [a b] (-> a
+                                       (assoc-in [:outgoing k] b)
+                                       (assoc-in [:incoming k] b))) v))
 
-(defn get-flash-value! [k]
-  (let [v (get @*sandbar-session* k)]
-    (do (session-delete-key! k)
-        v)))
+(defn get-flash-value!
+  "Get a value from the flash which may have been added during the current or
+   previous request."
+  [k]
+  (try (-> @*sandbar-flash*
+           :incoming
+           k)
+       (catch Exception _ nil)))
