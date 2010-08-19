@@ -41,18 +41,29 @@
       {:column :email :actions #{:sort}}
       :empty])
 
+(defrecord UserTable [params type props load-fn]
+  FilterAndSortTable
+  
+  (load-table-data
+   [this filters page-and-sort]
+   (load-fn type filters page-and-sort))
+  
+  (create-cell
+   [this k row-data]
+   (cond (= k :empty)
+         [:div
+          (clink-to (str "edit?id=" (:id row-data)) "Edit") ", "
+          (clink-to (str "delete?id=" (:id row-data)) "Delete")]
+         :else (k row-data)))
+  
+  (total-row-count [this filters] 0))
+
 (defn user-table [props load-fn request]
-  (filter-and-sort-table
-   (:params request)
-   {:type :app_user :name :user-table :props props}
-   user-table-columns 
-   (fn [k row-data]
-     (cond (= k :empty)
-           [:div
-            (clink-to (str "edit?id=" (:id row-data)) "Edit") ", "
-            (clink-to (str "delete?id=" (:id row-data)) "Delete")]
-           :else (k row-data)))
-   load-fn))
+  (filter-and-sort-table (UserTable. (:params request)
+                                     :app_user
+                                     props
+                                     load-fn)
+                         user-table-columns))
 
 (defn user-list-page [props load-fn request]
   [:div
