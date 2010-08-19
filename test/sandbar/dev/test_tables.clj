@@ -108,7 +108,7 @@
                    {:sort [] :filter [:b "v-b"]})))))))
 
 (deftest test-build-page-and-sort-map
-  (is (= (build-page-and-sort-map {:sort [:a :asc :b :desc]})
+  (is (= (build-page-and-sort-map nil {:sort [:a :asc :b :desc]})
          {:sort [:asc "a" :desc "b"]})))
 
 (deftest test-build-filter-map
@@ -118,8 +118,10 @@
 (deftest test-current-page-and-sort!
   (binding [*table-id* :test-table
             *sandbar-session* (atom (test-table-state {:sort [:b :asc]}))]
-    (is (= (current-page-and-sort! {"sort-desc" "a"})
-           {:sort [:asc "b" :desc "a"]}))))
+    (is (= (current-page-and-sort! nil {"sort-desc" "a"})
+           {:sort [:asc "b" :desc "a"]}))
+    (is (= (current-page-and-sort! 10 {"sort-desc" "a"})
+           {:sort [:asc "b" :desc "a"] :page 0 :page-size 10}))))
 
 (deftest test-create-table-sort-and-filter-controls
   (binding [*table-id* :test-table
@@ -163,6 +165,10 @@
 
 (def table-javascript
      "
+function page_test_table(n) {
+  updateTable_test_table('/ideas?page' + '=' + n);
+}
+
 function sortColumn_test_table(dir, column) {
   updateTable_test_table('/ideas?sort-' + dir + '=' + column);
 }

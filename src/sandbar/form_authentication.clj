@@ -6,7 +6,7 @@
 ;; the terms of this license.
 ;; You must not remove this notice, or any other, from this software.
 
-(ns sandbar.basic-authentication
+(ns sandbar.form-authentication
   "Provide support for form based authentication."
   (:use (compojure core)
         (ring.util [response :only (redirect)])
@@ -26,8 +26,8 @@
                                    get-params
                                    store-errors-and-redirect)])))
 
-(defprotocol BasicAuthAdapter
-  "Protocol for processing basic authenticaion credentials."
+(defprotocol FormAuthAdapter
+  "Protocol for processing form authenticaion credentials."
   (load-user [this username password] "Load user information based on the
     provided username and password. Return a map which contains at least a
     username and a set of roles under the keys :username and :roles.")
@@ -35,7 +35,7 @@
     used to validate the user's password. The user passed to this function
     will have been loaded from load-user."))
 
-(defn basic-auth [request]
+(defn form-authentication [request]
   (do (session-put! :auth-redirect-uri
                     (:uri request))
       (redirect "/login")))
@@ -76,9 +76,9 @@
                      (merge {:form-data (dissoc %1 :username :password)} %2))
                     failure)))))
 
-(defn basic-auth-routes
+(defn form-authentication-routes
   ([layout adapter]
-     (basic-auth-routes "" layout adapter))
+     (form-authentication-routes "" layout adapter))
   ([path-prefix layout adapter]
      (routes
       (GET (str path-prefix "/login*") request

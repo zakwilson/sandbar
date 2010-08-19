@@ -74,22 +74,24 @@
   (if-let [record (fetch-id type id)]
     (carte/delete-record @db type record)))
 
-(defn admin-role? [request]
-  (any-role-granted? :admin))
+(defn fetch [& body]
+  (println "fetch:" body)
+  (apply carte/fetch @db body))
 
-;; TODO - Add a feature to Carte that will allow you to ensure that a
-;; criteria is met no matter what previous criteria have been set.
-;; Carte should be able to deal with an empty criteria list.
+(defn count-records [table filters]
+  (apply carte/count-records @db
+         (tables/carte-table-adapter table
+                                     filters
+                                     {})))
 
-(defn idea-table-records-function [request]
-  (fn [type filters sort-and-page]
-    (let [filters (if (not (admin-role? request))
-                    (merge filters
-                           {:user_id (current-username)})
-                    filters)]
-      (apply fetch (tables/carte-table-adapter type
-                                               filters
-                                               sort-and-page)))))
+(defn idea-table-records-function [type filters sort-and-page]
+  (let [filters (if (not (any-role-granted? :admin))
+                  (merge filters
+                         {:user_id (current-username)})
+                  filters)]
+    (apply fetch (tables/carte-table-adapter type
+                                             filters
+                                             sort-and-page))))
 
 (defn simple-list [type properties]
   {:paged-list (fn [filters] (if (empty? filters)

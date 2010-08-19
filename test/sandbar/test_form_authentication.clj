@@ -6,14 +6,14 @@
 ;; the terms of this license.
 ;; You must not remove this notice, or any other, from this software.
 
-(ns sandbar.test-basic-authentication
+(ns sandbar.test-form-authentication
   (:use (clojure test)
         (ring.util [response :only (redirect)])
         (sandbar core
                  stateful-session
                  auth
                  test-fixtures
-                 basic-authentication
+                 form-authentication
                  [test :only (t)])
         (sandbar.dev user-manager)))
 
@@ -28,7 +28,7 @@
            :else {})))
 
 (deftest test-login-validator
-  (let [auth-source (basic-auth-adapter test-login-load-fn {})]
+  (let [auth-source (form-authentication-adapter test-login-load-fn {})]
     (is (= ((login-validator auth-source)
             {:username "u"})
            {:_validation-errors {:password ["password cannot be blank!"]}
@@ -53,9 +53,10 @@
 
 
 (deftest test-authenticate!
-  (let [auth-source (basic-auth-adapter test-login-load-fn {})]
+  (let [auth-source (form-authentication-adapter test-login-load-fn {})]
     (t "authenticate!"
-       (binding [*sandbar-session* (atom {})]
+       (binding [*sandbar-session* (atom {})
+                 *sandbar-flash* (atom {})]
          (t "with missing username"
             (is (= (authenticate! auth-source
                                   {"password" "x"})
@@ -65,7 +66,8 @@
                                  {"username" "u"})
                   (redirect "login")))))
       (t "with correct password"
-         (binding [*sandbar-session* (atom {:auth-redirect-uri "/test"})]
+         (binding [*sandbar-flash* (atom {})
+                   *sandbar-session* (atom {:auth-redirect-uri "/test"})]
            (let [result (authenticate! auth-source
                                        {"username" "u" "password" "test"})]
              (is (= result
@@ -74,7 +76,8 @@
                     {:current-user {:name "u"
                                     :roles #{:admin}}})))))
       (t "with incorrect password"
-         (binding [*sandbar-session* (atom {:auth-redirect-uri "/test"})]
+         (binding [*sandbar-flash* (atom {})
+                   *sandbar-session* (atom {:auth-redirect-uri "/test"})]
            (let [result (authenticate! auth-source
                                        {"username" "u" "password" "wrong"})]
              (is (= result
@@ -82,37 +85,39 @@
              (is (= (:auth-redirect-uri @*sandbar-session*)
                     "/test"))))))))
 
-(deftest test-with-security-with-basic-auth
-  (binding [*sandbar-session* (atom {})]
-    (t "with security using basic auth"
+(deftest test-with-security-with-form-auth
+  (binding [*sandbar-session* (atom {})
+            *sandbar-flash* (atom {})]
+    (t "with security using form authentication"
        (t "url config"
           (let [with-security (partial with-security
                                        :uri
                                        fixture-security-config)]
             (binding [app-context (atom "")]
             (t "redirect to login when user auth required and user is nil"
-               (let [result ((with-security basic-auth)
+               (let [result ((with-security form-authentication)
                              {:uri "/admin/page"})]
                  (is (= result
                         (redirect "/login")))
                  (is (= (:auth-redirect-uri @*sandbar-session*)
                         "/admin/page"))))
             (t "redirect to login with a uri-prefix"
-               (is (= ((with-security basic-auth "/prefix")
+               (is (= ((with-security form-authentication "/prefix")
                        {:uri "/admin/page"})
                       (redirect "/prefix/login"))))
             (t "allow access when auth is not required"
-               (is (= ((with-security basic-auth)
+               (is (= ((with-security form-authentication)
                        {:uri "/test.css"})
                       "/test.css")))
-            (binding [*sandbar-session* (atom {:current-user {:name "testuser"
+            (binding [*sandbar-flash* (atom {})
+                      *sandbar-session* (atom {:current-user {:name "testuser"
                                                               :roles #{:user}}})]
               (t "redirect to permission denied when valid user without role"
-                 (is (= ((with-security basic-auth)
+                 (is (= ((with-security form-authentication)
                          {:uri "/admin/page"})
                         (redirect "/permission-denied"))))
               (t "allow access when user is in correct role"
-                 (is (= ((with-security basic-auth)
+                 (is (= ((with-security form-authentication)
                          {:uri "/some/page"})
                         "/some/page")))))))
       (t "and NO url config"
@@ -121,13 +126,13 @@
               (is (= ((with-security
                         (fn [r] (access-error "testing with-security"))
                         []
-                        basic-auth)
+                        form-authentication)
                       {:uri "/x"})
                      (redirect "/permission-denied"))))
            (t "redirect to login when authorization exception is thrown"
               (is (= ((with-security
                         (fn [r] (authentication-error "testing with-security"))
                         []
-                        basic-auth)
+                        form-authentication)
                       {:uri "/x"})
                      (redirect "/login")))))))))

@@ -10,6 +10,7 @@
 
 (def properties
      {:business_unit "Business Unit"
+      :idea-table "Ideas"
       :idea_category "Category"
       :idea_status "Status"
       :idea_type "Type"

@@ -46,7 +46,9 @@
            "("
            (apply str
                   (interpose ", "
-                             (map (fn [a#] (str "'" a# "'"))
+                             (map (fn [a#] (if (string? a#)
+                                             (str "'" a# "'")
+                                             a#))
                                   [~@args])))
            ");") ~title)))
 

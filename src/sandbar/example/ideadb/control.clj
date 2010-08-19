@@ -14,7 +14,7 @@
                               clink-to
                               property-lookup)]
                  util
-                                      basic-authentication)
+                 form-authentication)
         (sandbar.dev user-manager
                      standard-pages
                      list-manager
@@ -104,6 +104,6 @@
   (security-edit-user-routes "/admin" (var admin-users-layout) (fn [r] (:uri r))
                              properties user-data-functions)
   
-  (basic-auth-routes (fn [r & b] (main-layout "Login" r b)) 
-                     (basic-auth-adapter (user-data-functions :load)
+  (form-authentication-routes (fn [r & b] (main-layout "Login" r b)) 
+                     (form-authentication-adapter (user-data-functions :load)
                                          properties)))

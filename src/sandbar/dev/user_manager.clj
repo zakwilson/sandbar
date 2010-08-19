@@ -14,7 +14,7 @@
                  util
                  stateful-session
                  validation
-                 basic-authentication
+                 form-authentication
                  [auth :only (hash-password)])
         (sandbar.dev forms
                      tables 
@@ -128,8 +128,8 @@
 ;; ================================
 ;;
 
-(defrecord DefaultBasicAuthAdapter [load-fn]
-  BasicAuthAdapter
+(defrecord DefaultFormAuthAdapter [load-fn]
+  FormAuthAdapter
   (load-user
    [this username password]
    (let [user (first (load-fn :app_user
@@ -153,8 +153,8 @@
        m
        (add-validation-error m "Incorrect username or password!")))))
 
-(defn basic-auth-adapter [load-fn props]
-  (merge (DefaultBasicAuthAdapter. load-fn) props))
+(defn form-authentication-adapter [load-fn props]
+  (merge (DefaultFormAuthAdapter. load-fn) props))
 
 ;;
 ;; Routes

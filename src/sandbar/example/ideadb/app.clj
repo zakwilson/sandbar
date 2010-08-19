@@ -13,7 +13,7 @@
         (ring.adapter jetty)
         (ring.middleware params stacktrace file file-info session)
         (sandbar core auth stateful-session
-                 [basic-authentication :only (basic-auth)])
+                 [form-authentication :only (form-authentication)])
         (sandbar.dev [standard-pages :only (page-not-found-404)]
                      [tables :only (wrap-table-js)])
         (sandbar.example.ideadb control
@@ -38,7 +38,7 @@
 
 (def app
      (-> development-routes
-         (with-security security-config basic-auth)
+         (with-security security-config form-authentication)
          wrap-stateful-session
          wrap-params
          (wrap-file "public")

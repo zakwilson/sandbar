@@ -38,29 +38,47 @@
       {:column :status :actions #{:sort :filter}}])
 
 (defn generate-welcome-message [request]
-  (if (not (data/admin-role? request))
+  (if (not (any-role-granted? :admin))
     [:div {:id "welcome-message"}
      (str "Welcome " (current-username)
           "! The table below displays all of the ideas you have submitted.")]))
 
+;; TODO - Add a feature to Carte that will allow you to ensure that a
+;; criteria is met no matter what previous criteria have been set.
+;; Carte should also be able to deal with an empty criteria list.
+
+(defrecord IdeaTable [params type props page-size]
+  FilterAndSortTable
+  
+  (load-table-data
+   [this filters page-and-sort]
+   (data/idea-table-records-function type filters page-and-sort))
+  
+  (create-cell
+   [this k row-data]
+   (cond (= k :name)
+         (if (any-role-granted? :admin)
+           (clink-to (str "/idea/edit?id=" (:id row-data))
+                     (:name row-data))
+           (:name row-data))
+         (= k :empty)
+         (clink-to (str "/idea/delete?id=" (:id row-data)) "Delete")
+         :else (or (k row-data) "")))
+  
+  (total-row-count [this filters]
+                   (data/count-records type filters)))
+
+(defn make-table-adapter [params type properties page-size]
+  (IdeaTable. params type properties page-size))
+
 (defn idea-table [request]
-  (let [admin (data/admin-role? request)]
-    (filter-and-sort-table
-     (:params request)
-     {:type :idea :name :idea-table :props properties}
-     (if admin 
-       (conj idea-table-columns :empty)
-       idea-table-columns)
-     (fn [k row-data]
-       (cond (= k :name)
-             (if admin
-               (clink-to (str "/idea/edit?id=" (:id row-data))
-                         (:name row-data))
-               (:name row-data))
-             (= k :empty)
-             (clink-to (str "/idea/delete?id=" (:id row-data)) "Delete")
-             :else (or (k row-data) "")))
-     (data/idea-table-records-function request))))
+  (filter-and-sort-table (make-table-adapter (:params request)
+                                             :idea
+                                             properties
+                                             2)
+                         (if (any-role-granted? :admin)
+                           (conj idea-table-columns :empty)
+                           idea-table-columns)))
 
 (defn idea-list-view [request]
   (generate-welcome-message request)
@@ -68,10 +86,10 @@
    (idea-table request)))
 
 (defn user-has-ideas? [request]
-  (< 0 (count ((data/idea-table-records-function request) :idea {} {}))))
+  (< 0 (count (data/idea-table-records-function :idea {} {}))))
 
 (defn idea-list [request]
-  (if (or (data/admin-role? request)
+  (if (or (any-role-granted? :admin)
           (user-has-ideas? request))
     (list-layout "Idea List"
                  request
@@ -137,7 +155,7 @@
                 {"" "Select a Status..."})])
 
 (defn new-idea-form [request]
-  (let [admin (data/admin-role? request)]
+  (let [admin (any-role-granted? :admin)]
     (standard-form "Submit an Idea" "/idea/new" 
                    (if admin
                      {:submit "Save and Close" :submit-and-new "Save and New"}

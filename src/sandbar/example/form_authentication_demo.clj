@@ -6,15 +6,14 @@
 ;; the terms of this license.
 ;; You must not remove this notice, or any other, from this software.
 
-(ns sandbar.example.basic-auth-demo
-  "Simple example of using sandbar.auth and sandbar.dev.basic-authentication
-   to do form based authentication."
+(ns sandbar.example.form-authentication-demo
+  "Simple example of using sandbar.auth with sandbar.form-authentication."
   (:use (ring.adapter jetty)
         (ring.middleware params file file-info)
         (compojure core)
         (hiccup core page-helpers)
         (sandbar core stateful-session auth
-                 basic-authentication validation)
+                 form-authentication validation)
         (sandbar.example [auth-demo :only (load-data-from
                                            layout
                                            home-view admin-view member-view
@@ -44,7 +43,7 @@
 ;;
 
 (defrecord DemoAdapter []
-  BasicAuthAdapter
+  FormAuthAdapter
   (load-user
    [this username password]
    (let [login {:username username :password password}]
@@ -60,13 +59,13 @@
        m
        (add-validation-error m "Incorrect username or password!")))))
 
-(defn basic-auth-adapter []
+(defn form-authentication-adapter []
   (merge (DemoAdapter.) properties))
 
 ;;
 ;; Routes
 ;; ======
-;; We add basic-auth-routes to get the login form, passing it our
+;; We add form-authentication-routes to get the login form, passing it our
 ;; layout, properties and the UserModel. We also create a route
 ;; for the permission-denied page which is where the user will be
 ;; redirected when they attempt to visit a page that they do not have
@@ -77,8 +76,8 @@
   (GET "/member*" [] (layout (member-view)))
   (GET "/admin*" [] (layout (admin-view)))
   (GET "/permission-denied*" [] (layout (permission-denied-view)))
-  (basic-auth-routes (fn [r c] (layout c))
-                     (basic-auth-adapter))
+  (form-authentication-routes (fn [r c] (layout c))
+                     (form-authentication-adapter))
   (ANY "*" [] (layout (home-view))))
 
 ;;
@@ -95,12 +94,12 @@
 
 ;;
 ;; Add the with-security middleware to enable authorization and
-;; authentication passing it the basic-auth authorization function. We
+;; authentication passing it the form-authentication function. We
 ;; also add middleware for channel security.
 
 (def app
      (-> my-routes
-         (with-security basic-auth)
+         (with-security form-authentication)
          wrap-stateful-session
          (wrap-file "public")
          wrap-file-info
