@@ -58,13 +58,14 @@
 
 (defn uri-seq
   ([request]
-	(uri-seq request #{})) 
+     (uri-seq request #{})) 
   ([request ignore-prefix-coll]
-    (if-let [uri (:uri request)]
-	  (let [matching-prefix (first (filter #(.startsWith uri %) ignore-prefix-coll))
-		    uri (if matching-prefix (subs uri (count matching-prefix)) uri)]
-		(filter #(not (empty? %)) (re-split #"/" uri)))
-	  [])))
+     (if-let [uri (:uri request)]
+       (let [matching-prefix (first
+                              (filter #(.startsWith uri %) ignore-prefix-coll))
+             uri (if matching-prefix (subs uri (count matching-prefix)) uri)]
+         (filter #(not (empty? %)) (re-split #"/" uri)))
+       [])))
 
 (defn query-part [request controller action]
   (let [path (uri-seq request)]
@@ -76,7 +77,6 @@
 ;;      1) Maybe add a thread local var which contains path
 ;;         information so that you can create functions that can
 ;;         easily link to the same controller and other controllers.
-;;      2) Configure if :reload should be used
 ;;      3) How do we deal with layouts
 (defn autorouter
   "Dynamically find an action based on the URI. The action must be a function
@@ -90,7 +90,7 @@
    for a function named edit. If another request method is used it will look
    for edit-post, edit-put, edit-delete."
   ([route-adapter]
-	(autorouter route-adapter []))
+     (autorouter route-adapter []))
   ([route-adapter ignore-prefix-coll]
     (let [ns *ns*]
       (routes
