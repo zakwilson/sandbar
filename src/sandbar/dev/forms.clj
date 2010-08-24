@@ -167,8 +167,8 @@
                                  title) req)
       :field-name fname
       :html [:input
-              (merge {:type "Text" :name (name fname) :value ""
-                      :class "sandbar-textfield"} options)]}))
+             (merge {:type "Text" :name (name fname) :value ""
+                     :class "sandbar-textfield"} options)]}))
 
 (defn form-password
   "Use form-textfield to create a text field and then change it to a

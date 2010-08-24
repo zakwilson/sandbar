@@ -320,6 +320,19 @@ function displayResults_" qualifier "(data) {
   $('" table-id "').replace(data['html']);
 }"))
 
+(defmethod js-ajax :jquery [js-lib qualifier table-id]
+  (str "
+function updateTable_" qualifier "(uri) {
+  $.ajax({
+    type: 'post',
+    dataType: 'json',
+    url: uri,
+    success: function(data) {
+      $('#" table-id "').html(data['html']);
+    }
+  });
+}"))
+
 (defn js [table-id table-uri js-lib]
   (let [q (.replaceAll table-id "-" "_")]
     (str "

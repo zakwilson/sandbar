@@ -1,8 +1,8 @@
 (defproject sandbar/sandbar "0.3.0-SNAPSHOT"
   :description "Clojure web application libraries built on top of Ring
                 and Compojure."
-  :dependencies [[org.clojure/clojure "1.2.0-RC3"]
-                 [org.clojure/clojure-contrib "1.2.0-RC3"]
+  :dependencies [[org.clojure/clojure "1.2.0"]
+                 [org.clojure/clojure-contrib "1.2.0"]
                  [compojure "0.4.1"]
                  [hiccup "0.2.6"]
                  [inflections "0.4-SNAPSHOT"]]
