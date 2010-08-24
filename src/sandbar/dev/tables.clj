@@ -39,23 +39,28 @@
                          (merge-with merge-table-state-vecs
                                      current-state
                                      b)))))
-       (merge
-        (hash-map :sort
-                  (vec (concat
-                        (if-let [sort (get params "sort-asc")]
-                          [(keyword sort) :asc])
-                        (if-let [sort (get params "sort-desc")]
-                          [(keyword sort) :desc])
-                        (if-let [sort (get params "remove-sort")]
-                          [(keyword sort) :remove]))))
-        (hash-map :filter
-                  (vec (concat
-                        (if-let [filter (get params "filter")]
-                          [(keyword filter) (get params "filter-value")])
-                        (if-let [filter (get params "remove-filter")]
-                          [(keyword filter) :remove]))))
-        (if-let [page (get params "page")]
-          {:page (Integer/valueOf page)})))
+       (let [s
+             (hash-map :sort
+                       (vec (concat
+                             (if-let [sort (get params "sort-asc")]
+                               [(keyword sort) :asc])
+                             (if-let [sort (get params "sort-desc")]
+                               [(keyword sort) :desc])
+                             (if-let [sort (get params "remove-sort")]
+                               [(keyword sort) :remove]))))
+             f
+             (hash-map :filter
+                       (vec (concat
+                             (if-let [filter (get params "filter")]
+                               [(keyword filter) (get params "filter-value")])
+                             (if-let [filter (get params "remove-filter")]
+                               [(keyword filter) :remove]))))
+             p
+             (cond (or (not (empty? (concat (:filter f) (:sort s)))))
+                   {:page 0}
+                   :else (if-let [page (get params "page")]
+                           {:page (Integer/valueOf page)}))]
+         (merge s f p)))
       :table-state *table-id*))
 
 (defn build-page-and-sort-map [page-size table-state-map]

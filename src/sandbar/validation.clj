@@ -124,3 +124,10 @@
                          (fn [k msg]
                            (str (property-lookup msg k) " cannot be blank!"))))
 
+(defn non-nil [m & args]
+  (multi-value-validator m args
+                         (fn [k]
+                           (let [value (get m k)]
+                             (not (nil? value))))
+                         (fn [k msg]
+                           (str (property-lookup msg k) " cannot be nil!"))))

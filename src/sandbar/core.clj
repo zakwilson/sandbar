@@ -93,8 +93,6 @@
 (defn javascript [name]
   (include-js (str (js-path) name)))
 
-
-
 (defn icon [name]
   [:link {:rel "icon" :type "image/png" :href (str (image-path) name)}])
 
