@@ -1,0 +1,12 @@
+lein jar
+mkdir temp
+J=`find . -name "sandbar*.jar"`
+mv $J temp
+cd temp
+jar xvf *.jar
+rm -rf *.jar clojure hiccup ring testdrive.clj project.clj sandbar/example
+jar cvf $J *
+mv $J ..
+cd ..
+rm -rf temp
+

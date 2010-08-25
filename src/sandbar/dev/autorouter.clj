@@ -13,6 +13,8 @@
         (clojure.contrib [str-utils :only (re-split)]
                          [ns-utils :only (ns-vars)])))
 
+(def *reload-namespaces* true)
+
 (defn get-controller-ns
   "Given a root-ns, generate the name of the controller namespace. Controller
    namespaces are located relative to the root-ns on the classpath."
@@ -38,7 +40,7 @@
    the passed action."
   [ns-name action]
   (if (and
-       (load-namespace ns-name)
+       (if *reload-namespaces* (load-namespace ns-name) true)
        (some #(= % (symbol action))
              (ns-vars (symbol ns-name))))
     ns-name

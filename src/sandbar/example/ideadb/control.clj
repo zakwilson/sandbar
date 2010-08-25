@@ -81,7 +81,8 @@
 ;; reqpose to be json.
 
 (defroutes ideadb-routes
-  (autorouter route-adapter)
+  (binding [*reload-namespaces* true]
+      (autorouter route-adapter))
   
   (GET "/admin/list*" request
        (main-layout "Administrator"
