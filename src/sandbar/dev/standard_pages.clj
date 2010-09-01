@@ -13,18 +13,21 @@
         (sandbar.dev forms)))
 
 (defn confirm-delete
-  ([find-by-id-fn type props id]
-     (confirm-delete find-by-id-fn type :name props id))
-  ([find-by-id-fn type name-fn props id]
-     (let [list-item (find-by-id-fn type id)]
+  ([find-by-id-fn type label-fn id]
+     (confirm-delete find-by-id-fn type :name label-fn id))
+  ([find-by-id-fn type name-fn label-fn id]
+     (let [list-item (find-by-id-fn type id)
+           label-fn (fn [k] (try (label-fn k)
+                                 (catch Exception _ (name k))))]
        (standard-form
-        (str "Delete " (props type))
+        (str "Delete " (label-fn type))
         "delete"
         "Yes - Delete it"
-        [:div {:class "sandbar-confirm-delete"} (if list-item
-                [:input {:type "Hidden" :name "id" :value id}])
+        [:div {:class "sandbar-confirm-delete"}
+         (if list-item
+           [:input {:type "Hidden" :name "id" :value id}])
          [:div (str "Are you sure you want to delete the "
-                    (props type)
+                    (label-fn type)
                     " named "
                     (name-fn list-item)
                     "?")]]))))

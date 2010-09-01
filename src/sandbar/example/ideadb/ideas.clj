@@ -56,7 +56,7 @@
 ;; criteria is met no matter what previous criteria have been set.
 ;; Carte should also be able to deal with an empty criteria list.
 
-(defrecord IdeaTable [params type props page-size]
+(defrecord IdeaTable [type props page-size]
 
   ResourceList
   
@@ -77,17 +77,14 @@
 
   (label [this key] (get props key (name key))))
 
-(defn make-table-adapter [params type properties page-size]
-  (IdeaTable. params type properties page-size))
+(def idea-table-adapter (IdeaTable. :idea properties 2))
 
 (defn idea-table [request]
-  (filter-and-sort-table (make-table-adapter (:params request)
-                                             :idea
-                                             properties
-                                             2)
+  (filter-and-sort-table idea-table-adapter
                          (if (any-role-granted? :admin)
                            (conj idea-table-columns :empty)
-                           idea-table-columns)))
+                           idea-table-columns)
+                         (:params request)))
 
 (defn idea-list-view [request]
   (generate-welcome-message request)

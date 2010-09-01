@@ -94,8 +94,8 @@
  (let [t-state (update-table-state! params)]
     (build-filter-map t-state)))
 
-(defn current-page-and-sort! [adapter]
-  (let [t-state (update-table-state! (:params adapter))]
+(defn current-page-and-sort! [adapter params]
+  (let [t-state (update-table-state! params)]
     (build-page-and-sort-map adapter t-state)))
 
 (defn get-column-name [column-spec-row]
@@ -247,9 +247,8 @@
 (defn make-table-view
   "Create the current view of the data that will be displayed in the table.
    This includes paging information."
-  [adapter column-spec]
-  (let [params (:params adapter)
-        page-and-sort (current-page-and-sort! adapter)
+  [adapter column-spec params]
+  (let [page-and-sort (current-page-and-sort! adapter params)
         filters (current-filters! params)
         table-data (find-resources adapter filters page-and-sort)
         view {:data table-data
@@ -296,9 +295,9 @@
     (do (println "row:" next-row)
         next-row)))
 
-(defn filter-and-sort-table [adapter column-spec]
+(defn filter-and-sort-table [adapter column-spec params]
   (binding [*table-id* (keyword (str (name (:type adapter)) "-table"))]
-    (let [table-view (make-table-view adapter column-spec)]
+    (let [table-view (make-table-view adapter column-spec params)]
       [:div {:id *table-id* :class (or (:class adapter)
                                        "filter-and-sort-table")}
        (create-table-sort-and-filter-controls adapter)

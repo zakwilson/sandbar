@@ -46,7 +46,7 @@
    (clink-to (str "edit?id=" (:id data)) "Edit") ", "
    (clink-to (str "delete?id=" (:id data)) "Delete")])
 
-(defrecord UserTable [params type props load-fn]
+(defrecord UserTable [type props load-fn]
   ResourceList
   
   (find-resources
@@ -60,11 +60,11 @@
   (label [this key] (get props key (name key))))
 
 (defn user-table [props load-fn request]
-  (filter-and-sort-table (UserTable. (:params request)
-                                     :app_user
+  (filter-and-sort-table (UserTable. :app_user
                                      props
                                      load-fn)
-                         user-table-columns))
+                         user-table-columns
+                         (:params request)))
 
 (defn user-list-page [props load-fn request]
   [:div

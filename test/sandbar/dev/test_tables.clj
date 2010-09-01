@@ -115,7 +115,7 @@
   (is (= (build-filter-map {:filter [:a "v-a" :b "v-b"]})
          {:a "v-a" :b "v-b"})))
 
-(defrecord TestTable [params page-size]
+(defrecord TestTable [page-size]
   PagedResources
   (page-size [this] page-size)
   (total-resource-count [this filter] 0)
@@ -126,16 +126,16 @@
 (deftest test-current-page-and-sort!
   (binding [*table-id* :test-table
             *sandbar-session* (atom (test-table-state {:sort [:b :asc]}))]
-    (is (= (current-page-and-sort! {:params {"sort-desc" "a"}})
+    (is (= (current-page-and-sort! {} {"sort-desc" "a"})
            {:sort [:asc "b" :desc "a"]}))
-    (is (= (current-page-and-sort! (TestTable. {"sort-desc" "a"} 10))
+    (is (= (current-page-and-sort! (TestTable. 10) {"sort-desc" "a"})
            {:sort [:asc "b" :desc "a"] :page 0 :page-size 10}))))
 
 (deftest test-create-table-sort-and-filter-controls
   (binding [*table-id* :test-table
             *sandbar-session* (atom (test-table-state {:sort [:a :asc]
                                                        :filter [:b "v-b"]}) )]
-    (is (= (create-table-sort-and-filter-controls (TestTable. {} 0))
+    (is (= (create-table-sort-and-filter-controls (TestTable. 0))
            [:div {:class "filter-and-sort-controls"}
             [:div "Remove sort: "
              [:a {:href "javascript:removeSort_test_table('a');"} [:a]]]
