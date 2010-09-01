@@ -41,22 +41,23 @@
       {:column :email :actions #{:sort}}
       :empty])
 
+(defmethod display-table-cell [:app_user :empty] [type k data]
+  [:div
+   (clink-to (str "edit?id=" (:id data)) "Edit") ", "
+   (clink-to (str "delete?id=" (:id data)) "Delete")])
+
 (defrecord UserTable [params type props load-fn]
-  FilterAndSortTable
+  ResourceList
   
-  (load-table-data
+  (find-resources
    [this filters page-and-sort]
    (load-fn type filters page-and-sort))
   
-  (create-cell
-   [this k row-data]
-   (cond (= k :empty)
-         [:div
-          (clink-to (str "edit?id=" (:id row-data)) "Edit") ", "
-          (clink-to (str "delete?id=" (:id row-data)) "Delete")]
-         :else (k row-data)))
-  
-  (total-row-count [this filters] 0))
+  (fields [this] [])
+
+  Labels
+
+  (label [this key] (get props key (name key))))
 
 (defn user-table [props load-fn request]
   (filter-and-sort-table (UserTable. (:params request)

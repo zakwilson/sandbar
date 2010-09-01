@@ -115,19 +115,27 @@
   (is (= (build-filter-map {:filter [:a "v-a" :b "v-b"]})
          {:a "v-a" :b "v-b"})))
 
+(defrecord TestTable [params page-size]
+  PagedResources
+  (page-size [this] page-size)
+  (total-resource-count [this filter] 0)
+
+  Labels
+  (label [this key] key))
+
 (deftest test-current-page-and-sort!
   (binding [*table-id* :test-table
             *sandbar-session* (atom (test-table-state {:sort [:b :asc]}))]
-    (is (= (current-page-and-sort! nil {"sort-desc" "a"})
+    (is (= (current-page-and-sort! {:params {"sort-desc" "a"}})
            {:sort [:asc "b" :desc "a"]}))
-    (is (= (current-page-and-sort! 10 {"sort-desc" "a"})
+    (is (= (current-page-and-sort! (TestTable. {"sort-desc" "a"} 10))
            {:sort [:asc "b" :desc "a"] :page 0 :page-size 10}))))
 
 (deftest test-create-table-sort-and-filter-controls
   (binding [*table-id* :test-table
             *sandbar-session* (atom (test-table-state {:sort [:a :asc]
                                                        :filter [:b "v-b"]}) )]
-    (is (= (create-table-sort-and-filter-controls {})
+    (is (= (create-table-sort-and-filter-controls (TestTable. {} 0))
            [:div {:class "filter-and-sort-controls"}
             [:div "Remove sort: "
              [:a {:href "javascript:removeSort_test_table('a');"} [:a]]]
@@ -202,5 +210,79 @@ function displayResults_test_table(data) {
   (is (= (js "test-table" "/ideas" :prototype)
          table-javascript)))
 
+(deftest test-sorts-on-path
+  (is (= (sorts-on-path "" [:asc :name :desc :person.name])
+         [:asc :name]))
+  (is (= (sorts-on-path "person" [:asc :name :desc :person.name])
+         [:desc :name]))
+  (is (= (sorts-on-path "person" [:asc :name :desc :person.name
+                                  :asc :person.mom.name])
+         [:desc :name]))
+  (is (= (sorts-on-path "person.mom" [:asc :name :desc :person.name
+                                      :asc :person.mom.name])
+         [:asc :name])))
+
+(deftest test-filters-on-path
+  (is (= (filters-on-path "" {:name "A" :person.name "B"})
+         {:name "A"}))
+  (is (= (filters-on-path "person" {:name "A" :person.name "B"})
+         {:name "B"}))
+  (is (= (filters-on-path "person" {:name "A" :person.name "B"
+                                    :person.mom.name "C"})
+         {:name "B"}))
+  (is (= (filters-on-path "person.mom" {:name "A" :person.name "B"
+                                        :person.mom.name "C"})
+         {:name "C"})))
+
+(deftest test-carte-table-adapter
+  (is (= (carte-table-adapter :artist {:name "Jim"} {})
+         [:artist {:name "Jim"}]))
+  (is (= (carte-table-adapter :artist {:name "Jim"} {:sort [:asc :name]
+                                                     :page 10
+                                                     :page-size 5})
+         [:artist {:name "Jim"} :order-by [:name :asc] :page 10 5]))
+  (is (= (carte-table-adapter [:artist :albums]
+                              {:name "Jim" :albums.title "Fun"}
+                              {:sort [:asc :name] :page 10 :page-size 5})
+         [:artist {:name "Jim"} :order-by [:name :asc]
+          :with [:albums {:title "Fun"}]
+          :page 10 5]))
+  (is (= (carte-table-adapter [:artist :albums]
+                              {:name "Jim" :albums.title "Fun"}
+                              {:sort [:asc :name :desc :albums.title]
+                               :page 10 :page-size 5})
+         [:artist {:name "Jim"} :order-by [:name :asc]
+          :with [:albums {:title "Fun"} :order-by [:title :desc]]
+          :page 10 5]))
+  (is (= (carte-table-adapter [:artist :albums :genre]
+                              {:name "Jim" :albums.title "Fun"
+                               :genre.name "Rock"}
+                              {:sort [:asc :name :desc :albums.title]
+                               :page 10 :page-size 5})
+         [:artist {:name "Jim"} :order-by [:name :asc]
+          :with [:albums {:title "Fun"} :order-by [:title :desc]]
+                [:genre {:name "Rock"}]
+          :page 10 5]))
+  (is (= (carte-table-adapter [:artist [:albums :genre]]
+                              {:name "Jim" :albums.title "Fun"
+                               :albums.genre.name "Rock"}
+                              {:sort [:asc :name :desc :albums.title
+                                      :asc :albums.genre.name]
+                               :page 10 :page-size 5})
+         [:artist {:name "Jim"} :order-by [:name :asc]
+          :with [:albums {:title "Fun"} :order-by [:title :desc]
+                 :with [:genre {:name "Rock"} :order-by [:name :asc]]]
+          :page 10 5]))
+  (is (= (carte-table-adapter [:artist [:albums :genre] :genre]
+                              {:name "Jim" :albums.title "Fun"
+                               :albums.genre.name "Rock" :genre.name "Rock"}
+                              {:sort [:asc :name :desc :albums.title
+                                      :asc :albums.genre.name]
+                               :page 10 :page-size 5})
+         [:artist {:name "Jim"} :order-by [:name :asc]
+          :with [:albums {:title "Fun"} :order-by [:title :desc]
+                 :with [:genre {:name "Rock"} :order-by [:name :asc]]]
+                [:genre {:name "Rock"}]
+          :page 10 5])))
 
 

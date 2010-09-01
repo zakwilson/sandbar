@@ -35,4 +35,5 @@
       :roles "Assigned Roles"
       :admin "Administrator"
       :user "User"
-      :logout-page "/idea/new"})
+      :logout-page "/idea/new"
+      :app_user "User"})

@@ -15,6 +15,17 @@
 
 (declare *table-id*)
 
+(defprotocol ResourceList
+  (find-resources [this filters page-and-sort])
+  (fields [this]))
+
+(defprotocol PagedResources
+  (page-size [this])
+  (total-resource-count [this filters]))
+
+(defprotocol Labels
+  (label [this key]))
+
 (defn merge-table-state-vecs [old new]
   (if (number? old)
     new
@@ -63,14 +74,15 @@
          (merge s f p)))
       :table-state *table-id*))
 
-(defn build-page-and-sort-map [page-size table-state-map]
+(defn build-page-and-sort-map [adapter table-state-map]
   (let [pas (assoc {} :sort
                    (vec
                     (apply concat
                            (map #(list (last %) (name (first %)))
                                 (partition 2 (:sort table-state-map))))))]
-    (if page-size
-      (assoc pas :page (or (:page table-state-map) 0) :page-size page-size)
+    (if (satisfies? PagedResources adapter)
+      (assoc pas :page (or (:page table-state-map) 0)
+                 :page-size (page-size adapter))
       pas)))
 
 (defn build-filter-map [table-state-map]
@@ -82,9 +94,9 @@
  (let [t-state (update-table-state! params)]
     (build-filter-map t-state)))
 
-(defn current-page-and-sort! [page-size params]
-  (let [t-state (update-table-state! params)]
-    (build-page-and-sort-map page-size t-state)))
+(defn current-page-and-sort! [adapter]
+  (let [t-state (update-table-state! (:params adapter))]
+    (build-page-and-sort-map adapter t-state)))
 
 (defn get-column-name [column-spec-row]
   (if (keyword? column-spec-row)
@@ -138,7 +150,7 @@
    (map #(if (contains? (:actions %) :sort) (:column %))
         (filter map? column-spec))))
 
-(defn sort-table-header [props column-spec]
+(defn sort-table-header [adapter column-spec]
   (let [t-state (:sort (get-table-state *table-id*))
         sort-dir-map (reduce
                       (fn [a b]
@@ -155,9 +167,9 @@
               (vector :th {:nowrap ""}
                       (if (contains? sort-columns %)
                         (link-to-js (sortColumn opp-sort-dir (name %))
-                                    (props %)
+                                    (label adapter %)
                                     *table-id*)
-                        (props %))
+                        (label adapter %))
                       "&nbsp;"
                       (cond (= sort-dir :asc) (image "sort_ascending.png")
                             (= sort-dir :desc) (image "sort_descending.png")
@@ -175,21 +187,21 @@
            (apply vector (map link-fn (data-fn t-state))))))
         "")))
 
-(defn create-table-sort-and-filter-controls [props]
+(defn create-table-sort-and-filter-controls [adapter]
   (let [current-state (get-table-state *table-id*)]
     (vec
      (conj
       [:div {:class "filter-and-sort-controls"}]
       (create-saf-table-control current-state :sort "Remove sort: "
                                #(link-to-js (removeSort (name %))
-                                            ((keyword %) props %)
+                                            (label adapter (keyword %))
                                             *table-id*)
                                #(map first (partition 2 %)))
       (create-saf-table-control current-state :filter "Remove filter: "
                                 #(let [c (first %)]
                                    (link-to-js (removeFilter (name c))
                                                (str
-                                                ((keyword c) props c)
+                                                (label adapter (keyword c))
                                                 " = "
                                                 (last %))
                                                *table-id*))
@@ -232,21 +244,15 @@
 (defn- page-control-footer [view]
   (page-controls view [:td]))
 
-(defprotocol FilterAndSortTable
-  (load-table-data [this filters page-and-sort])
-  (create-cell [this name data])
-  (total-row-count [this filters]))
-
 (defn make-table-view
   "Create the current view of the data that will be displayed in the table.
    This includes paging information."
   [adapter column-spec]
-  (let [{:keys [params props page-size]} adapter
-        page-and-sort (current-page-and-sort! page-size params)
+  (let [params (:params adapter)
+        page-and-sort (current-page-and-sort! adapter)
         filters (current-filters! params)
-        table-data (load-table-data adapter filters page-and-sort)
-        view {:props props
-              :data table-data
+        table-data (find-resources adapter filters page-and-sort)
+        view {:data table-data
               :column-count (count column-spec)}]
     (if-let [page-size (:page-size page-and-sort)]
       (let [page (get page-and-sort :page 0)
@@ -257,41 +263,49 @@
                      :page page
                      :first first
                      :last last
-                     :available (total-row-count adapter filters)
+                     :available (total-resource-count adapter filters)
                      :visible visible}))
       view)))
+
+(defmulti display-table-cell (fn [type k data] [type k]))
+
+(defmethod display-table-cell :default [type k data]
+           (or (k data) ""))
 
 (defn build-row
   "Build one table row."
   [adapter column-spec row-data css-class]
-  (table-row
-   (map #(let [cell-data
-               (create-cell adapter
-                            (get-column-name %)
-                            row-data)
-               cell-data (if (map? cell-data)
-                           cell-data
-                           {:value cell-data})]
-           (merge
-            {:column (get-column-name %)
-             :value nil
-             :attr (merge {:align :left}
-                          (:attr %))
-             :actions (:actions %)}
-            cell-data))
-        column-spec)
-   css-class))
+  (println "row-input" row-data)
+  (let [next-row (table-row
+                  (map #(let [cell-data
+                              (display-table-cell (:type adapter)
+                                                  (get-column-name %)
+                                                  row-data)
+                              cell-data (if (map? cell-data)
+                                          cell-data
+                                          {:value cell-data})]
+                          (merge
+                           {:column (get-column-name %)
+                            :value nil
+                            :attr (merge {:align :left}
+                                         (:attr %))
+                            :actions (:actions %)}
+                           cell-data))
+                       column-spec)
+                  css-class)]
+    (do (println "row:" next-row)
+        next-row)))
 
 (defn filter-and-sort-table [adapter column-spec]
   (binding [*table-id* (keyword (str (name (:type adapter)) "-table"))]
-    (let [table-view (make-table-view adapter column-spec)
-          props (:props table-view)]
-      [:div {:id *table-id* :class "filter-and-sort-table"}
-       (create-table-sort-and-filter-controls props)
+    (let [table-view (make-table-view adapter column-spec)]
+      [:div {:id *table-id* :class (or (:class adapter)
+                                       "filter-and-sort-table")}
+       (create-table-sort-and-filter-controls adapter)
        [:table {:class "list"}
-        (page-control-header (property-lookup props *table-id*)
+        (page-control-header (label adapter *table-id*)
                              table-view)
-        (sort-table-header props column-spec)
+        (sort-table-header adapter column-spec)
         (doall
          (map (partial build-row adapter column-spec)
               (:data table-view)
@@ -372,23 +386,85 @@ function removeFilter_" q "(column) {
            :body (js table-id ((keyword table-id) js-uri-map) js-lib)})
         (handler request)))))
 
+;;
+;; Functions for adapting this table to carte backend
+;;
+
+(defn remove-path-from-keyword [path k]
+  (keyword (subs (name k)
+                 (if (= path "") 0 (+ 1 (count path))))))
+
+(defn sorts-on-path [path sort]
+  (flatten
+   (filter #(= (.indexOf (name (last %)) ".") -1)
+           (map #(vector (first %)
+                          (remove-path-from-keyword path (last %)))
+                 (filter (if (= path "")
+                           #(= (.indexOf (name (last %)) ".") -1)
+                           #(.startsWith (name (last %)) (str path ".")))
+                         (partition 2 sort))))))
+
+(defn filters-on-path [path filters]
+  (reduce (fn [a b]
+            (let [k (remove-path-from-keyword path (key b))]
+              (if (= (.indexOf (name k) ".") -1)
+                (assoc a k (val b))
+                a)))
+          {}
+          (select-keys filters
+                       (filter (if (= path "")
+                                 #(= (.indexOf (name %) ".") -1)
+                                 #(.startsWith (name %) (str path ".")))
+                               (keys filters)))))
+
+(defn- new-root-path [path next]
+  (let [n (name next)]
+    (if (= path "")
+      n
+      (str path
+           "."
+           n))))
+
+(defn carte-query
+  ([table filters sort]
+     (let [query [table]
+           query (if (empty? filters) query (conj query filters))
+           query (if (and sort
+                          (not (empty? sort)))
+                   (vec
+                    (concat query
+                            [:order-by]
+                            (map #(let [[field dir] (reverse %)]
+                                    [(keyword field) dir])
+                                 (partition 2 sort))))
+                   query)]
+       query))
+  ([root-path table joins filters sort]
+     (let [query (carte-query table
+                              (filters-on-path root-path filters)
+                              (sorts-on-path root-path sort))
+           join-queries (map #(if (coll? %)
+                                (carte-query (new-root-path root-path (first %))
+                                             (first %)
+                                             (rest %)
+                                             filters
+                                             sort)
+                                (let [p (new-root-path root-path %)]
+                                  (carte-query %
+                                               (filters-on-path p filters)
+                                               (sorts-on-path p sort))))
+                             joins)]
+       (if (not (empty? join-queries))
+             (concat query [:with] join-queries)
+             query))))
+
 (defn carte-table-adapter
   "Transform filter and sort information from a filter-and-sort table into
    a query that carte can understand."
   [table filters sort-and-page]
   (let [{:keys [sort page page-size]} sort-and-page
-        query [table]
-        query (if (empty? filters) query (conj query filters))
-        query (if (and sort
-                       (not (empty? sort)))
-                (vec
-                 (concat query
-                         [:order-by]
-                         (map #(let [[field dir] (reverse %)]
-                                 [(keyword field) dir])
-                              (partition 2 sort))))
-                query)
-        query (if page-size
-                (concat query [:page page page-size])
-                query)]
-    query))
+        tables (if (keyword? table) [table] table)
+        query (carte-query "" (first tables) (rest tables) filters sort)]
+    (if page-size
+      (concat query [:page page page-size])
+      query)))

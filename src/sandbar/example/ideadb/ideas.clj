@@ -43,30 +43,39 @@
      (str "Welcome " (current-username)
           "! The table below displays all of the ideas you have submitted.")]))
 
+(defmethod display-table-cell [:idea :name] [type k data]
+           (if (any-role-granted? :admin)
+             (clink-to (str "/idea/edit?id=" (:id data))
+                       (:name data))
+             (:name data)))
+
+(defmethod display-table-cell [:idea :empty] [type k data]
+           (clink-to (str "/idea/delete?id=" (:id data)) "Delete"))
+
 ;; TODO - Add a feature to Carte that will allow you to ensure that a
 ;; criteria is met no matter what previous criteria have been set.
 ;; Carte should also be able to deal with an empty criteria list.
 
 (defrecord IdeaTable [params type props page-size]
-  FilterAndSortTable
+
+  ResourceList
   
-  (load-table-data
+  (find-resources
    [this filters page-and-sort]
    (data/idea-table-records-function type filters page-and-sort))
+
+  (fields [this] [])
+
+  PagedResources
+
+  (page-size [this] page-size)
   
-  (create-cell
-   [this k row-data]
-   (cond (= k :name)
-         (if (any-role-granted? :admin)
-           (clink-to (str "/idea/edit?id=" (:id row-data))
-                     (:name row-data))
-           (:name row-data))
-         (= k :empty)
-         (clink-to (str "/idea/delete?id=" (:id row-data)) "Delete")
-         :else (or (k row-data) "")))
-  
-  (total-row-count [this filters]
-                   (data/count-records type filters)))
+  (total-resource-count [this filters]
+                        (data/count-records type filters))
+
+  Labels
+
+  (label [this key] (get props key (name key))))
 
 (defn make-table-adapter [params type properties page-size]
   (IdeaTable. params type properties page-size))
