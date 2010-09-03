@@ -87,8 +87,8 @@
                          (:params request)))
 
 (defn idea-list-view [request]
-  (generate-welcome-message request)
   (html
+   (generate-welcome-message request)
    (idea-table request)))
 
 (defn user-has-ideas? [request]
