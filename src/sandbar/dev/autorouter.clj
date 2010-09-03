@@ -74,21 +74,27 @@
           :else "")))
 
 ;; TODO 
-;;      1) Maybe add a thread local var which contains path
-;;         information so that you can create functions that can
-;;         easily link to the same controller and other controllers.
-;;      3) How do we deal with layouts
+;; Add a thread local var which contains path information so that you
+;; can create functions that can easily link to the same controller
+;; and other controllers.
+
 (defn autorouter
   "Dynamically find an action based on the URI. The action must be a function
-   of the request. For example, the URI /edit will look for a function named
-   edit in the namespace <ns-prefix>.controller. The URI /user/edit will look
-   for the edit function in the namespace <ns-prefix>.controller.user. If
-   your routes are defined in com.company.routes then <ns-prefix> =
-   com.company. This function will automatically deal with HEAD and TRACE
-   requests (not implemented), you must provide you own implementaions for
-   GET, POST, PUT and DELETE. If a GET request is /user/edit then it will look
-   for a function named edit. If another request method is used it will look
-   for edit-post, edit-put, edit-delete."
+   of the request.
+
+   For example: the URI '/edit' will map to a function named
+   edit in the namespace <ns-prefix>.control. The URI '/user/edit' will map
+   to the edit function in the namespace <ns-prefix>.user. <ns-prefix> can
+   be any path like com.google.niftyapp or sandbar.example.ideadb.
+
+   If a GET request is made with the URI '/user/edit' then this will map to
+   a function named edit. All other types will require the reqeust method to
+   follow the function name. A POST request to '/user/edit' will map to a
+   function named edit-post.
+
+   In the future, this function will automatically deal with HEAD and TRACE
+   requests, leaving the user to provide implementaions for GET, POST, PUT
+   and DELETE."
   ([route-adapter]
      (autorouter route-adapter []))
   ([route-adapter ignore-prefix-coll]

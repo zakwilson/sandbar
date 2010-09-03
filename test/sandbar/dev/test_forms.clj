@@ -426,3 +426,11 @@
         (is (= (layout-table [] "A" nil)
                [:table
                 [:tr [:td {:valign "top"} "A"]]])))))
+
+(deftest test-get-params
+  (is (= (get-params [:a :b] {"a" "a" "b" "b"})
+         {:a "a" :b "b"}))
+  (is (= (get-params [:a :b] {:a "a" :b "b"})
+         {:a "a" :b "b"}))
+  (is (= (get-params [:a :b] {"c" "c" :a "a" :b "b"})
+         {:a "a" :b "b"})))

@@ -81,7 +81,8 @@
    (form-multi-checkbox props :roles (load-fn :role) :name)])
 
 (defn edit-user-form [data-fns props request]
-  (let [lookup-fn (fn [r] ((data-fns :lookup) :app_user (get (:params r) "id")))
+  (let [lookup-fn (fn [r] ((data-fns :lookup) :app_user
+                           (get-param (:params r) :id)))
         action (if (.endsWith (:uri request) "new") :new :edit)
         form-data (if (= action :new) {} (lookup-fn request))
         title (if (= action :new) "Create New User" "Edit User")]
@@ -201,9 +202,9 @@
                                 (fn [u]
                                   (str (:first_name u) " " (:last_name u)))
                                 props
-                                (get (:params request) "id"))))
+                                (get-param (:params request) :id))))
    (POST (str path-prefix "/user/delete*") {params :params}
          (do
            (if (not (form-cancelled? params))
-             ((data-fns :delete) :app_user (get params "id")))
+             ((data-fns :delete) :app_user (get-param params :id)))
            (redirect "list")))))

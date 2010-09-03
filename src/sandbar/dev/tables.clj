@@ -53,23 +53,24 @@
        (let [s
              (hash-map :sort
                        (vec (concat
-                             (if-let [sort (get params "sort-asc")]
+                             (if-let [sort (get-param params :sort-asc)]
                                [(keyword sort) :asc])
-                             (if-let [sort (get params "sort-desc")]
+                             (if-let [sort (get-param params :sort-desc)]
                                [(keyword sort) :desc])
-                             (if-let [sort (get params "remove-sort")]
+                             (if-let [sort (get-param params :remove-sort)]
                                [(keyword sort) :remove]))))
              f
              (hash-map :filter
                        (vec (concat
-                             (if-let [filter (get params "filter")]
-                               [(keyword filter) (get params "filter-value")])
-                             (if-let [filter (get params "remove-filter")]
+                             (if-let [filter (get-param params :filter)]
+                               [(keyword filter)
+                                (get-param params :filter-value)])
+                             (if-let [filter (get-param params :remove-filter)]
                                [(keyword filter) :remove]))))
              p
              (cond (or (not (empty? (concat (:filter f) (:sort s)))))
                    {:page 0}
-                   :else (if-let [page (get params "page")]
+                   :else (if-let [page (get-param params :page)]
                            {:page (Integer/valueOf page)}))]
          (merge s f p)))
       :table-state *table-id*))
@@ -274,7 +275,6 @@
 (defn build-row
   "Build one table row."
   [adapter column-spec row-data css-class]
-  (println "row-input" row-data)
   (let [next-row (table-row
                   (map #(let [cell-data
                               (display-table-cell (:type adapter)
@@ -292,8 +292,7 @@
                            cell-data))
                        column-spec)
                   css-class)]
-    (do (println "row:" next-row)
-        next-row)))
+    next-row))
 
 (defn filter-and-sort-table [adapter column-spec params]
   (binding [*table-id* (keyword (str (name (:type adapter)) "-table"))]

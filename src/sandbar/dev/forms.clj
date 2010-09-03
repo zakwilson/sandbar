@@ -69,10 +69,14 @@
                  rows)))
       (vec (concat [:table] rows)))))
 
-(defn get-params [key-map params]
-  (reduce (fn [a b] (assoc a (keyword b) (get params b)))
+(defn get-params
+  "Get params from a map where the keys may be strings or keywords."
+  [keys params]
+  (reduce (fn [a b]
+            (let [v (get-param params b)]
+              (assoc a b v)))
           {}
-          (map name key-map)))
+          keys))
 
 (defn cancel-button []
   [:input {:type "submit" :value "Cancel" :name "cancel"
@@ -137,7 +141,7 @@
               (new-reset-button "Reset")]])])
 
 (defn form-cancelled? [params]
-  (= "Cancel" (get params "cancel")))
+  (= "Cancel" (get-param params :cancel)))
 
 (defn form-field-label [title req]
   [:div {:class "field-label"} title
@@ -202,10 +206,12 @@
   [m params cb-set]
   (let [new-map (reduce
                  (fn [a b]
-                   (if (and (contains? cb-set (keyword (key b)))
-                            (= "checkbox-true" (val b)))
-                     (assoc a (keyword (key b)) "Y")
-                     a))
+                   (let [k (key b)
+                         k (if (keyword? k) k (keyword k))]
+                     (if (and (contains? cb-set k)
+                              (= "checkbox-true" (val b)))
+                       (assoc a k "Y")
+                       a)))
                  m
                  params)]
     (reduce (fn [a b] (if (b a) a (assoc a b "N")))
@@ -242,7 +248,7 @@
   "Add the key k to the map m where the value of k is is a vector of
    selected values."
   [m params k all-values name-fn]
-  (let [v (get params (name k))
+  (let [v (get-param params k)
         selected-values (set (filter-nil-vec (if (string? v) [v] v)))
         selected (filter #(contains? selected-values (name-fn %)) all-values)]
     (assoc m k selected)))

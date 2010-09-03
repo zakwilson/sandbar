@@ -11,7 +11,7 @@
   (:use (ring.util [response :only (redirect)])
         (compojure core) 
         (hiccup core page-helpers)
-        (sandbar stateful-session validation)
+        (sandbar core stateful-session validation)
         (sandbar.dev forms tables standard-pages))
   (:require [clojure.contrib.str-utils2 :as string]))
 
@@ -57,7 +57,7 @@
           request)]))))
 
 (defn get-action [request]
-  (get (:route-params request) "*"))
+  (get-param (:route-params request) :*))
 
 (defn list-editor [adapter finished request]
   (let [params (:params request)
@@ -67,12 +67,12 @@
           (.startsWith action "/add")
           (list-editor-form adapter request)
           (.startsWith action "/edit")
-          (list-editor-form adapter request (get params "id"))
+          (list-editor-form adapter request (get-param params :id))
           (.startsWith action "/delete")
           (confirm-delete (fn [t id] ((:find-by-id adapter) id))
                           (:id adapter)
                           (:properties adapter)
-                          (get params "id"))
+                          (get-param params :id))
           :else "This action is not implemented...")))
 
 (defn save-list-item [adapter form-data action]
@@ -89,17 +89,17 @@
            (.startsWith action "/add")
            (save-list-item adapter
                            {:type (:id adapter)
-                            :name (get params "name")}
+                            :name (get-param params :name)}
                            "add")
            (.startsWith action "/edit")
            (save-list-item adapter
                            {:type (:id adapter)
-                            :name (get params "name")
-                            :id (get params "id")}
+                            :name (get-param params :name)
+                            :id (get-param params :id)}
                            "edit")
            (.startsWith action "/delete")
            (do
-             ((:delete-by-id adapter) (get params "id"))
+             ((:delete-by-id adapter) (get-param params :id))
              "list")
            :else "list"))))
 

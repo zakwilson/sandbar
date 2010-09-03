@@ -64,7 +64,6 @@
        (save (:type m) (dissoc m :type))
        (save m)))
   ([arg & body]
-     (println "save:" arg body)
      (apply carte/save-or-update @db arg body)))
 
 (defn delete [& body]

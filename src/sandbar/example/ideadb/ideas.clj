@@ -200,7 +200,6 @@
 (defn save-idea-success-fn [action success]
   (fn [form-data]
     (do
-      (println form-data)
       (data/save :idea form-data)
       (set-flash-value! :user-message (if (= action "new")
                                         "Your idea has been successfully
@@ -217,7 +216,7 @@
                                         "Please enter a customer need.")))
 (defn save-idea! [params action]
   (redirect
-   (let [submit (get params "submit")
+   (let [submit (get-param params :sumbit)
          success (if (= submit "Save and New")
                    (cpath "/idea/new")
                    (cpath "/ideas"))]
@@ -238,7 +237,7 @@
 ;;
 
 (defn edit-idea-form [request params]
-  (let [form-data (data/fetch-id :idea (get params "id"))]
+  (let [form-data (data/fetch-id :idea (get-param params :id))]
     (standard-form "Administrator Form" "/idea/edit"
                    "Save Changes"
                    (form-layout-grid [1 1 1 1 4]
@@ -259,7 +258,7 @@
                                (:params request))))
 
 (defn edit-idea-post [{params :params}]
-  (save-idea! params (str "edit?id=" (get params "id"))))
+  (save-idea! params (str "edit?id=" (get-param params :id))))
 
 ;;
 ;; Delete Idea
@@ -272,10 +271,10 @@
                (confirm-delete data/fetch-id
                                :idea
                                properties
-                               (get (:params request) "id"))))
+                               (get-param (:params request) :id))))
 
 (defn delete-idea-post [{params :params}]
   (do
     (if (not (form-cancelled? params))
-      (data/delete-id :idea (get params "id")))
+      (data/delete-id :idea (get-param params :id)))
     (redirect "list")))
