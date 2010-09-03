@@ -134,11 +134,13 @@
   [:div {:class "sandbar-form"}
    (form-to [:post (cpath action)]
             [:div {:class "login-form"}
-             body
-             [:div {:class "login-buttons"}
-              (new-submit-button submit-name)
-              "&nbsp;&nbsp;"
-              (new-reset-button "Reset")]])])
+             (conj (second body)
+                   [:tr
+                    [:td
+                     [:div {:class "login-buttons"}
+                      (new-submit-button submit-name)
+                      "&nbsp;&nbsp;"
+                      (new-reset-button "Reset")]]])])])
 
 (defn form-cancelled? [params]
   (= "Cancel" (get-param params :cancel)))
