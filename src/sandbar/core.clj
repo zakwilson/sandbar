@@ -114,7 +114,7 @@
      (link-to (str (cpath path)) (image name mouseover attrs))))
 
 (defn get-param
-  "Get a parameter from the params may where the key my be a string or
+  "Get a parameter from the params map where the key may be a string or
    a keyword."
   [params key]
   (or (get params key) (get params (name key))))
