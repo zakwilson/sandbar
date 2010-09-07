@@ -111,7 +111,7 @@
 
 (deftest test-form-textfield
   (are [args _ e-label exp-name exp-value]
-       (= (apply form-textfield args)
+       (= (apply textfield args)
           {:type :textfield
            :label e-label
            :field-name :name
@@ -138,7 +138,7 @@
 
 (deftest test-form-password
   (are [args _ e-label exp-name exp-value]
-       (= (apply form-password args)
+       (= (apply password args)
           {:type :password
            :label e-label
            :field-name :name
@@ -176,7 +176,7 @@
 
 (deftest test-form-checkbox
   (are [args _ e-label exp-name exp-value]
-       (= (apply form-checkbox args)
+       (= (apply checkbox args)
           {:type :checkbox
            :label e-label
            :field-name :name
@@ -207,28 +207,28 @@
      (t "containing a text field"
         (is (= (create-form-field-cell
                 {}
-                (form-textfield "f1" :name))
+                (textfield "f1" :name))
                [:div
                 (test-form-opt-label "f1")
                 (form-textfield-fixture "name" "")])))
      (t "containing a text area"
         (is (= (create-form-field-cell
                 {}
-                (form-textarea "f1" :name {}))
+                (textarea "f1" :name {}))
                [:div
                 (test-form-opt-label "f1")
                 (test-form-textarea "name" "")])))
      (t "containing a checkbox"
         (is (= (create-form-field-cell
                 {}
-                (form-checkbox "f1" :name))
+                (checkbox "f1" :name))
                [:div
                 (form-checkbox-fixture "name" false)
                 [:span {:class "field-label"} "f1"]])))
      (t "containing a text checkbox group"
         (is (= (create-form-field-cell
                 {}
-                (form-multi-checkbox {}
+                (multi-checkbox {}
                                      :name [{:id 1 :value "a"}
                                             {:id 2 :value "b"}]
                                      :value))
@@ -247,7 +247,7 @@
        (t "with a single required text field and no initial state"
           (is (= (form-layout-grid
                   :test
-                  [(form-textfield "f1" :name :required)]
+                  [(textfield "f1" :name :required)]
                   {})
                  (test-form-table [1]
                                   [[:div
@@ -256,7 +256,7 @@
        (t "with a single optional text field and no initial state"
           (is (= (form-layout-grid
                   :test
-                  [(form-textfield "f1" :name)]
+                  [(textfield "f1" :name)]
                   {})
                  (test-form-table [1]
                                   [[:div
@@ -266,7 +266,7 @@
           (is (= (form-layout-grid
                   one-column-layout
                   :test
-                  [(form-textfield "f1" :name)]
+                  [(textfield "f1" :name)]
                   {}
                   {:name "n"})
                  (test-form-table [1]
@@ -276,8 +276,8 @@
        (t "with two optional text fields and no initial state"
           (is (= (form-layout-grid
                   :test
-                  [(form-textfield "f1" :name)
-                   (form-textfield "f2" :age)]
+                  [(textfield "f1" :name)
+                   (textfield "f2" :age)]
                   {})
                  (test-form-table [1 1]
                                   [[:div
@@ -290,8 +290,8 @@
           (is (= (form-layout-grid
                   one-column-layout
                   :test
-                  [(form-textfield "f1" :name)
-                   (form-textfield "f2" :age)]
+                  [(textfield "f1" :name)
+                   (textfield "f2" :age)]
                   {})
                  (test-form-table [1 1]
                                   [[:div
@@ -304,8 +304,8 @@
           (is (= (form-layout-grid
                   [2]
                   :test
-                  [(form-textfield "f1" :name)
-                   (form-textfield "f2" :age)]
+                  [(textfield "f1" :name)
+                   (textfield "f2" :age)]
                   {})
                  (test-form-table [2]
                                   [[:div
@@ -318,9 +318,9 @@
           (is (= (form-layout-grid
                   [1 2]
                   :test
-                  [(form-textfield "f1" :name)
-                   (form-textfield "f2" :age)
-                   (form-textfield "f3" :title)]
+                  [(textfield "f1" :name)
+                   (textfield "f2" :age)
+                   (textfield "f3" :title)]
                   {})
                  (test-form-table [1 2]
                                   [[:div
@@ -335,9 +335,9 @@
        (t "with one hidden field"
           (is (= (form-layout-grid
                   :test
-                  [(form-hidden :title)
-                   (form-textfield "f1" :name)
-                   (form-textfield "f2" :age)]
+                  [(hidden :title)
+                   (textfield "f1" :name)
+                   (textfield "f2" :age)]
                   {})
                  [:div
                   (layout-table []
@@ -351,10 +351,10 @@
        (t "with two hidden fields"
           (is (= (form-layout-grid
                   :test
-                  [(form-hidden :title)
-                   (form-hidden :id)
-                   (form-textfield "f1" :name)
-                   (form-textfield "f2" :age)]
+                  [(hidden :title)
+                   (hidden :id)
+                   (textfield "f1" :name)
+                   (textfield "f2" :age)]
                   {})
                  [:div
                   (layout-table []

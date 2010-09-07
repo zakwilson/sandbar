@@ -72,13 +72,13 @@
    (user-table props load-fn request)])
 
 (defn user-form-fields [load-fn props]
-  [(form-textfield props :username :required)
-   (form-password props :new_password :required)
-   (form-textfield props :first_name :required)
-   (form-textfield props :last_name :required)
-   (form-textfield props :email :required)
-   (form-checkbox props :account_enabled)
-   (form-multi-checkbox props :roles (load-fn :role) :name)])
+  [(textfield props :username :required)
+   (password props :new_password :required)
+   (textfield props :first_name :required)
+   (textfield props :last_name :required)
+   (textfield props :email :required)
+   (checkbox props :account_enabled)
+   (multi-checkbox props :roles (load-fn :role) :name)])
 
 (defn edit-user-form [data-fns props request]
   (let [lookup-fn (fn [r] ((data-fns :lookup) :app_user
@@ -92,8 +92,8 @@
                           :user
                           (conj
                            (user-form-fields (data-fns :load) props)
-                           (form-hidden :id)
-                           (form-hidden :password))
+                           (hidden :id)
+                           (hidden :password))
                           request
                           (if (= action :edit)
                             (assoc form-data :new_password "_unchanged")

@@ -128,33 +128,33 @@
 ;;
 
 (defn public-idea-fields []
-  [(form-textarea "What is your idea?  Describe your new idea in 100 words
+  [(textarea "What is your idea?  Describe your new idea in 100 words
                    or less?"
                   :description {:cols 75 :rows 10} :required)
-   (form-textfield "Do you have a name for your idea?"
+   (textfield "Do you have a name for your idea?"
                    :name {:size 70} :required)
-   (form-textarea "What consumer need would be met by this new idea?"
+   (textarea "What consumer need would be met by this new idea?"
                   :customer_need {:cols 75 :rows 5} :required)
-   (form-textfield "Who can we thank for this idea? (Optional)"
+   (textfield "Who can we thank for this idea? (Optional)"
                    :originator {:size 70})])
 
 (defn admin-idea-fields []
-  [(form-select "Category"
+  [(select "Category"
                :category :name :name
                (data/fetch :idea_category :order-by :name)
                {}
                {"" "Select a Category..."})
-   (form-select "Type"
+   (select "Type"
                 :idea_type :name :name
                 (data/fetch :idea_type :order-by :name)
                 {}
                 {"" "Select a Type..."})
-   (form-select "Business Unit"
+   (select "Business Unit"
                 :business_unit :name :name
                 (data/fetch :business_unit :order-by :name)
                 {}
                 {"" "Select a Business Unit..."})
-   (form-select "Status"
+   (select "Status"
                 :status :name :name
                 (data/fetch :idea_status :order-by :name)
                 {}
@@ -245,9 +245,9 @@
                                      (conj
                                       (concat (public-idea-fields)
                                               (admin-idea-fields))
-                                      (form-hidden :id)
-                                      (form-hidden :date_entered)
-                                      (form-hidden :user_id))
+                                      (hidden :id)
+                                      (hidden :date_entered)
+                                      (hidden :user_id))
                                      request
                                      form-data))))
 

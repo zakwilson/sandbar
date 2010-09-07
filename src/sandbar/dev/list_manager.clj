@@ -50,10 +50,10 @@
                 [:input {:type "Hidden" :name "id" :value id}])
          (form-layout-grid
           (:id adapter)
-          [(form-textfield "Name:"
-                           :name
-                           {:value (if list-item (:name list-item) "")
-                            :size 65} :required)]
+          [(textfield "Name:"
+                      :name
+                      {:value (if list-item (:name list-item) "")
+                       :size 65} :required)]
           request)]))))
 
 (defn get-action [request]

@@ -20,8 +20,8 @@
                                         non-empty-string
                                         if-valid)])
         (sandbar.dev [forms :only (form-layout-grid
-                                   form-textfield
-                                   form-password
+                                   textfield
+                                   password
                                    login-form
                                    get-params
                                    store-errors-and-redirect)])))
@@ -46,8 +46,8 @@
    "Login"
    (form-layout-grid [1 1]
                      :login
-                     [(form-textfield adapter :username {:size 25} :required)
-                      (form-password adapter :password {:size 25}  :required)]
+                     [(textfield adapter :username {:size 25} :required)
+                      (password adapter :password {:size 25}  :required)]
                      request
                      {})))
 

@@ -7,8 +7,8 @@
 ;; You must not remove this notice, or any other, from this software.
 
 (ns sandbar.dev.forms
-  "High level form library. Form components and layout."
-  (:use (hiccup core form-helpers)
+  "Forms and form layouts."
+  (:use (hiccup (form-helpers :only [form-to]))
         (sandbar core util stateful-session)))
 
 ;;
@@ -82,23 +82,17 @@
   [:input {:type "submit" :value "Cancel" :name "cancel"
            :class "sandbar-button"}])
 
-(defn new-submit-button
-  ([] (new-submit-button "submit"))
+(defn submit-button
+  ([] (submit-button "submit"))
   ([v]
      [:input {:type "submit" :value v :name "submit"
               :class "sandbar-button"}]))
 
-(defn new-reset-button [v]
-  [:input {:type "reset" :value v
-           :class "sandbar-button"}])
-
-(defn alt-submit-button [text]
-  [:input {:type "submit" :value text :name "submit"
-           :class "sandbar-button"}])
-
 (defn create-submit-button [[k v]]
-  (cond (= k :submit) (new-submit-button v)
-        :else (new-submit-button v)))
+  (submit-button v))
+
+(defn reset-button [v]
+  [:input {:type "reset" :value v :class "sandbar-button"}])
 
 (defn submit-and-cancel-buttons [horf submit-buttons]
   (let [submit-spec (if (map? submit-buttons)
@@ -138,58 +132,64 @@
                    [:tr
                     [:td
                      [:div {:class "login-buttons"}
-                      (new-submit-button submit-name)
+                      (submit-button submit-name)
                       "&nbsp;&nbsp;"
-                      (new-reset-button "Reset")]]])])])
+                      (reset-button "Reset")]]])])])
 
 (defn form-cancelled? [params]
-  (= "Cancel" (get-param params :cancel)))
+  (let [cancel (get-param params :cancel)]
+    (contains? #{"cancel" "Cancel"} cancel)))
 
-(defn form-field-label [title req]
-  [:div {:class "field-label"} title
-   (if (= req :required) [:span {:class "required"} "*"] "")])
+(defn field-label [title key req]
+  (let [req (cond (keyword? req) req
+                  (contains? (set req) key) :required
+                  :else :optional)]
+    [:div {:class "field-label"} title
+     (if (= req :required) [:span {:class "required"} "*"] "")]))
 
-(defn form-textarea
-  ([title fname options] (form-textarea title fname options :optional))
+(defn textarea
+  ([title fname options] (textarea title fname options :optional))
   ([title fname options req]
      {:type :textarea
-      :label (form-field-label title req)
+      :label (field-label title fname req)
       :field-name fname
       :html [:textarea (merge {:name (name fname)} options)]}))
 
-(defn form-textfield
+(defn textfield
   "Create a form text field. In each arity, title can be either a string or
    a map of keys to strings. If it is a map then the fname will be looked up
    in this map and the value will be used as the title. In the arity 3 version
    options can either be a map of options or the :required keyword."
-  ([title fname] (form-textfield title fname {:size 35} :optional))
-  ([title fname options] (if (keyword? options)
-                           (form-textfield title fname {:size 35} options)
-                           (form-textfield title fname options :optional)))
+  ([title fname] (textfield title fname {:size 35} :optional))
+  ([title fname options] (if (map? options)
+                           (textfield title fname options :optional)
+                           (textfield title fname {:size 35} options)))
   ([title fname options req]
      {:type :textfield
-      :label (form-field-label (if (map? title)
+      :label (field-label (if (map? title)
                                  (property-lookup title fname)
-                                 title) req)
+                                 title)
+                          fname
+                          req)
       :field-name fname
       :html [:input
              (merge {:type "Text" :name (name fname) :value ""
                      :class "sandbar-textfield"} options)]}))
 
-(defn form-password
-  "Use form-textfield to create a text field and then change it to a
+(defn password
+  "Use textfield to create a text field and then change it to a
    password field."
   [& args]
-  (let [textfield (apply form-textfield args)]
+  (let [textfield (apply textfield args)]
     (-> textfield
         (assoc :type :password)
         (assoc :html [:input (merge (last (:html textfield))
                                     {:type "Password"})]))))
 
-(defn form-checkbox
+(defn checkbox
   "Create a form checkbox. The title can be a map or a string. If it is a map
    then the displayed title will be looked up in the map using fname."
-  ([title fname] (form-checkbox title fname {}))
+  ([title fname] (checkbox title fname {}))
   ([title fname options]
      {:type :checkbox
       :label [:span {:class "field-label"} (if (map? title)
@@ -224,9 +224,9 @@
   [:div {:class "group"}
      (map #(vector :div {:class "group-checkbox"} %) coll)])
 
-(defn form-multi-checkbox
+(defn multi-checkbox
   ([props many-spec]
-     (form-multi-checkbox props
+     (multi-checkbox props
                           (:alias many-spec)
                           ((:all-items many-spec))
                           (:name-fn many-spec)))
@@ -263,7 +263,7 @@
   (let [attrs (second field)]
     (= "group" (:class attrs))))
 
-(defn form-hidden [fname]
+(defn hidden [fname]
   {:type :hidden
    :label ""
    :field-name fname
@@ -272,13 +272,13 @@
 (defn select-map [coll key-key value-key]
   (apply merge (map #(sorted-map (key-key %) (value-key %)) coll)))
 
-(defn form-select
+(defn select
   ([title fname k v coll opts top]
-     (form-select title fname k v coll opts top :optional))
+     (select title fname k v coll opts top :optional))
   ([title fname k v coll opts top req]
      (let [s-map (select-map coll k v)]
        {:type :select
-        :label (form-field-label title req)
+        :label (field-label title fname req)
         :field-name fname
         :html (vec
                (concat
@@ -452,4 +452,6 @@
                        (not (empty? (:id m))))
                 m
                 (dissoc m :id)))))
+
+
 
