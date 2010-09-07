@@ -85,6 +85,17 @@
 
 (defn get-flash-value!
   "Get a value from the flash which may have been added during the current or
+   previous request. Deprecated. Prefer 'get-flash-value'. This function is no
+   longer destructive."
+  {:deprecated "0.3.0"}
+  [k]
+  (try (-> @*sandbar-flash*
+           :incoming
+           k)
+       (catch Exception _ nil)))
+
+(defn get-flash-value
+  "Get a value from the flash which may have been added during the current or
    previous request."
   [k]
   (try (-> @*sandbar-flash*
