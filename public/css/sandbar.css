@@ -120,3 +120,35 @@ div.help {
    background: #ffffcc url(../images/help.png) no-repeat 3px 3px;
    padding-left: 22px;
 }
+
+div.sandbar-form div.form-header {
+   padding: 3px;
+   background: #e8ecf5 url(../images/form_blue_edit.png) no-repeat 4px 4px;
+   border: 1px solid #C0C0C0;
+   margin-bottom: 10px;
+   padding-left: 30px;
+}
+
+div.sandbar-form div.form-header table {
+ width: 100%;
+}
+
+div.sandbar-form span.form-title {
+ font-family: Arial, Verdana, Arial, Helvetica, sans-serif;
+ font-size: 18px;
+ font-weight: bold;
+ height: 40px;
+ vertical-align: top;
+ color: #666666;
+}
+
+div.form-header span.header-buttons {
+ text-align: right;
+}
+
+div.sandbar-form div.form-footer {
+ background: #e8ecf5;
+ padding: 5px;
+ border: 1px solid #C0C0C0;
+ margin-top: 10px;
+}

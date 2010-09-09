@@ -8,8 +8,14 @@
 
 (ns sandbar.dev.forms
   "Forms and form layouts."
-  (:use (hiccup (form-helpers :only [form-to]))
-        (sandbar core util stateful-session)))
+  (:use [ring.util.response :only [redirect]]
+        [compojure.core :only [routes GET POST]]
+        [hiccup.form-helpers :only [form-to]]
+        [sandbar.stateful-session :only [set-flash-value!
+                                         get-flash-value]]
+        [sandbar.core :only [cpath get-param property-lookup]]
+        [sandbar.validation :only [if-valid required-fields]])
+  (:require [compojure.route :as route]))
 
 ;;
 ;; Validation Helpers
@@ -432,7 +438,7 @@
   ([layout form-name coll request]
      (form-layout-grid layout form-name coll request {}))
   ([layout form-name coll request init-data]
-     (if-let [form-state (get-flash-value! form-name)]
+     (if-let [form-state (get-flash-value form-name)]
        (form-layout-grid* layout form-state coll)
        (form-layout-grid* layout {:form-data init-data} coll))))
 
@@ -453,5 +459,141 @@
                 m
                 (dissoc m :id)))))
 
+;;
+;; Making forms easier
+;;
 
+(defn form-routes [resource-uri add-form edit-form submit-fn]
+  (routes
+   (GET (str resource-uri "/:id") request (edit-form request))
+   (GET resource-uri request (add-form request))
+   (POST resource-uri
+         request
+         (submit-fn request))))
 
+(defn- field-def [type props name attrs]
+  (if (empty? attrs)
+    (list type props name)
+    (list type props name attrs)))
+
+(defn- expand-field
+  ([type props fields attrs]
+     (cond (= (name type) "multi-checkbox") [(apply list type props fields)]
+           (> (count fields) 1) (map #(field-def type props % attrs) fields)
+           :else [(field-def type props (first fields) attrs)]))
+  ([type props fields attrs required]
+     (map #(concat % [required]) (expand-field type props fields attrs))))
+
+(defn- expand [v p fields]
+  (vec (apply concat
+              (map #(let [t (first %)
+                          r (rest %)
+                          [f a] (if (map? (last r))
+                                  [(butlast r) (last r)]
+                                  [r {}])]
+                      (cond (= (name t) "hidden") [%]
+                            (contains? #{"checkbox" "multi-checkbox"} (name t))
+                            (expand-field t p f a)
+                            :else (expand-field t p f a v)))
+                   fields))))
+
+(defmacro field-list [validator properties & fields]
+  (let [v- (gensym "v_")
+        expanded (expand v- properties fields)]
+    `(let [~v- (required-fields ~validator)]
+       ~expanded)))
+
+(defn- categorize-fields [fields]
+  (reduce (fn [m next]
+            (let [type (name (first next))
+                  r (rest next)]
+              (cond (.endsWith type "multi-checkbox")
+                    (assoc m :multi (conj (:multi m) r))
+                    (.endsWith type "checkbox")
+                    (assoc m :yes-no (concat (:yes-no m)
+                                             (filter keyword? r)))
+                    :else
+                    (assoc m :default (concat (:default m)
+                                              (filter keyword? r))))))
+          {}
+          fields))
+
+(defn- build-marshal-chain [p fields]
+  (let [categorized-fields (categorize-fields fields)
+        chain [(list `get-params (vec (:default categorized-fields)) p)]
+        chain (if-let [yes-no (:yes-no categorized-fields)]
+                (conj chain (list `get-yes-no-fields p (set yes-no)))
+                chain)
+        chain (if-let [multi (:multi categorized-fields)]
+                (apply conj chain
+                       (map #(apply list `get-multi-checkbox p %) multi))
+                chain)]
+    (conj chain `clean-form-input)))
+
+;; The save and new value should not be the visible name
+
+(defmacro defform
+  "Define a form and produce a function that will generate the form's routes."
+  [resource uri & {:keys [fields on-cancel on-success load]
+                   :as options}]
+  (let [resource-id (keyword (name resource))
+        fields-sym (symbol (str (name resource) "-fields"))
+        marshal-sym (symbol (str (name resource) "-marshal"))
+        submit-sym (symbol (str (name resource) "-submit"))
+        view-sym (symbol (str (name resource) "-view"))
+        params- (gensym "params_")
+        marshal-chain (build-marshal-chain params- fields)
+        ;; semi-optional
+        on-cancel (or on-cancel uri)
+        on-success (or on-success `(fn [m#] ~uri))
+        load (or load `(fn [id#] {}))
+        ;; optional
+        validator (or (:validator options) `identity)
+        properties (or (:properties options) {})
+        title (or (:title options) `(fn [t#] (or (~resource-id ~properties)
+                                                 "Form")))
+        buttons (or (:buttons options) "Save")
+        field-layout (or (:field-layout options) [1])]
+    `(do
+       (def ~fields-sym
+            (field-list ~validator ~properties
+                        ~@fields))
+       (defn ~marshal-sym [~params-]
+         (-> ~@marshal-chain))
+       (defn ~submit-sym [request#]
+         (let [params# (:params request#)
+               uri# (:uri request#)]
+           (redirect
+            (if (form-cancelled? params#)
+              ~on-cancel
+              (let [form-data# (~marshal-sym params#)
+                    submit# (get-param params# :submit)]
+                (if-valid ~validator form-data#
+                          (fn [m#]
+                            (let [s# (~on-success m#)]
+                              (if (= submit# "Save and New")
+                                uri#
+                                s#)))
+                          (store-errors-and-redirect ~resource-id uri#)))))))
+       (defn ~view-sym [type# request#]
+         (let [params# (:params request#)
+               form-data# (case type#
+                                :edit (let [id# (get-param params# :id)]
+                                        (~load id#))
+                                {})]
+           (standard-form
+            (~title type#)
+            ~uri
+            ~buttons
+            (form-layout-grid ~field-layout
+                              ~resource-id
+                              ~fields-sym
+                              request#
+                              form-data#))))
+       (defn ~resource [layout#]
+         (form-routes ~uri
+                      (fn [request#]
+                        (layout# request# (~view-sym :add request#)))
+                      (fn [request#]
+                        (layout# request# (~view-sym :edit request#)))
+                      ~submit-sym)))))

@@ -141,3 +141,6 @@
                              (not (nil? value))))
                          (fn [k msg]
                            (str (property-lookup msg k) " cannot be nil!"))))
+
+(defn required-fields [validator]
+  (keys (:_validation-errors (validator {}))))
