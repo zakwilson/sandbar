@@ -52,10 +52,14 @@
               (assoc response :flash outgoing-flash)
               response)))))))
 
-(defn wrap-stateful-session [handler]
-  (wrap-session
-   (wrap-flash
-    (wrap-stateful-session* handler))))
+(defn wrap-stateful-session
+  ([handler]
+     (wrap-stateful-session handler {}))
+  ([handler options]
+     (-> handler
+         wrap-stateful-session*
+         wrap-flash
+         (wrap-session options))))
 
 (defn update-session! [update-fn value]
   (swap! *sandbar-session* update-fn value))
