@@ -72,12 +72,22 @@
       (list 'clojure.core/fn [m-]
             (build-validator-control m- v)))))
 
+;; Update this function to use ::validation-errors as a key and then
+;; create a get-validation-errors function to get the errors for a
+;; map. You may also want to put validation errors in the map's
+;; metadata.
+
 (defn add-validation-error
+  "Add an error message to a map of data. msg may be a string or a map."
   ([m msg] (add-validation-error m :form msg))
   ([m k msg]
-     (assoc m :_validation-errors
-         (merge-with (fn [a b] (vec (concat a b)))
-                     (:_validation-errors m) {k [msg]}))))
+     (let [msg (if (map? msg)
+                 ((keyword (str (name k) "-validation-error"))
+                  msg)
+                 (str msg))]
+       (assoc m :_validation-errors
+              (merge-with (fn [a b] (vec (concat a b)))
+                          (:_validation-errors m) {k [msg]})))))
 
 ;;
 ;; Validators
