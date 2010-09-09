@@ -58,7 +58,7 @@
 
 (def app (-> my-routes
              (wrap-stateful-session {:store (memory-store my-session)})
-             (wrap-reload ['sandbar.example.session-demo])))
+             (wrap-reload ['sandbar.example.session-with-reload-demo])))
 
 (defn run []
   (run-jetty (var app) {:join? false :port 8080}))
