@@ -162,18 +162,23 @@
 
 (defn new-idea-form [request]
   (let [admin (any-role-granted? :admin)]
-    (standard-form "Submit an Idea" "/idea/new" 
-                   (if admin
-                     {:submit "Save and Close" :submit-and-new "Save and New"}
-                     "Submit My Idea") 
-                   (form-layout-grid [1 1 1 1 4]
-                                     :idea
-                                     (if admin
-                                       (concat
-                                        (public-idea-fields)
-                                        (admin-idea-fields))
-                                       (public-idea-fields))
-                                     request))))
+    (template :over-under
+              "/idea/new"
+              {:title "Submit an Idea"
+               :buttons
+               (if admin
+                 [[:submit "Save and Close" ]
+                  [:submit-and-new "Save and New"]
+                  [:cancel]]
+                 [[:submit "Submit My Idea"] [:cancel]])}
+              (form-layout-grid [1 1 1 1 4]
+                                :idea
+                                (if admin
+                                  (concat
+                                   (public-idea-fields)
+                                   (admin-idea-fields))
+                                  (public-idea-fields))
+                                request))))
 
 (defn new-idea [request]
   (form-layout "New Idea Form"
@@ -238,18 +243,20 @@
 
 (defn edit-idea-form [request params]
   (let [form-data (data/fetch-id :idea (get-param params :id))]
-    (standard-form "Administrator Form" "/idea/edit"
-                   "Save Changes"
-                   (form-layout-grid [1 1 1 1 4]
-                                     :idea
-                                     (conj
-                                      (concat (public-idea-fields)
-                                              (admin-idea-fields))
-                                      (hidden :id)
-                                      (hidden :date_entered)
-                                      (hidden :user_id))
-                                     request
-                                     form-data))))
+    (template :over-under
+              "/idea/edit"
+              {:title "Administrator Form"
+               :buttons [[:submit "Save Changes"] [:cancel]]}
+              (form-layout-grid [1 1 1 1 4]
+                                :idea
+                                (conj
+                                 (concat (public-idea-fields)
+                                         (admin-idea-fields))
+                                 (hidden :id)
+                                 (hidden :date_entered)
+                                 (hidden :user_id))
+                                request
+                                form-data))))
 
 (defn edit-idea [request]
   (form-layout "Edit Idea Form"

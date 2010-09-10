@@ -42,19 +42,20 @@
      (list-editor-form adapter request nil))
   ([adapter request id]
      (let [list-item (if id ((:find-by-id adapter) id) nil)]
-       (standard-form
-        (str (if list-item "Edit " "Add ") (:visible-name adapter))
-        (if list-item "edit" "add")
-        "Save"
-        [:div (if list-item
-                [:input {:type "Hidden" :name "id" :value id}])
-         (form-layout-grid
-          (:id adapter)
-          [(textfield "Name:"
-                      :name
-                      {:value (if list-item (:name list-item) "")
-                       :size 65} :required)]
-          request)]))))
+       (template :over-under
+                 (if list-item "edit" "add")
+                 {:title (str (if list-item "Edit " "Add ")
+                              (:visible-name adapter))
+                  :buttons [[:save] [:cancel]]}
+                 [:div (if list-item
+                         [:input {:type "Hidden" :name "id" :value id}])
+                  (form-layout-grid
+                   (:id adapter)
+                   [(textfield "Name:"
+                               :name
+                               {:value (if list-item (:name list-item) "")
+                                :size 65} :required)]
+                   request)]))))
 
 (defn get-action [request]
   (get-param (:route-params request) :*))

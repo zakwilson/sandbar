@@ -15,7 +15,8 @@
                                          get-flash-value]]
         [sandbar.core :only [cpath get-param property-lookup]]
         [sandbar.validation :only [if-valid required-fields]])
-  (:require [compojure.route :as route]))
+  (:require [compojure.route :as route]
+            [clojure.string :as string]))
 
 ;;
 ;; Validation Helpers
@@ -84,67 +85,129 @@
           {}
           keys))
 
-(defn cancel-button []
-  [:input {:type "submit" :value "Cancel" :name "cancel"
-           :class "sandbar-button"}])
+(defn cancel-button
+  ([] (cancel-button "Cancel"))
+  ([v]
+     [:input {:type "submit" :value v :name "cancel"
+              :class "sandbar-button"}]))
 
 (defn submit-button
-  ([] (submit-button "submit"))
+  ([] (submit-button "Submit"))
   ([v]
      [:input {:type "submit" :value v :name "submit"
               :class "sandbar-button"}]))
 
-(defn create-submit-button [[k v]]
-  (submit-button v))
+(defn reset-button
+  ([] (reset-button "Reset"))
+  ([v]
+     [:input {:type "reset" :value v :class "sandbar-button"}]))
 
-(defn reset-button [v]
-  [:input {:type "reset" :value v :class "sandbar-button"}])
+(defn create-form-button [[k visible-name]]
+  (case k
+        :submit (submit-button visible-name)
+        :save (submit-button visible-name)
+        :cancel (cancel-button visible-name)
+        :reset (reset-button visible-name)
+        :save-and-new (submit-button visible-name)
+        :submit-and-new (submit-button visible-name)
+        (submit-button visible-name)))
 
-(defn submit-and-cancel-buttons [horf submit-buttons]
-  (let [submit-spec (if (map? submit-buttons)
-                      submit-buttons
-                      {:submit submit-buttons})]
+(defn compile-buttons [buttons]
+  (let [labels (take 2 (reverse buttons))
+        labels (if (= (second labels) :labels) (first labels) nil)
+        buttons (take-while #(not (keyword? %)) buttons)]
+    (map #(cond (= (count %) 1)
+                (let [button-type (first %)
+                      value (button-type labels)
+                      value (or value (string/capitalize
+                                       (name button-type)))]
+                  [button-type value])
+                (and (= (count %) 2) (keyword? (second %)))
+                [(first %) (get labels (second %) (second %))]
+                :else %)
+         buttons)))
+
+(defn special-button-text
+  "Returns a map which contains the value of the Cancel and Save and New
+   buttons. These values may be set by the user, so they can be anything, and
+   we need them in order to decide were to redirect after a form submission."
+  [buttons]
+  (let [buttons (compile-buttons buttons)
+        cancel (second (first (filter #(= (first %) :cancel) buttons)))
+        save-and-new (second
+                      (first
+                       (filter #(contains? #{:save-and-new :submit-and-new}
+                                           (first %))
+                               buttons)))]
+    {:cancel cancel :save-and-new save-and-new}))
+
+(defn display-buttons [class-prefix buttons]
+  (let [buttons (compile-buttons buttons)]
     (vec
      (concat
-      [:span {:class (str horf "-buttons")}]
-      (interleave (map create-submit-button submit-spec) (cycle ["&nbsp;"]))
-      [(cancel-button)]))))
+      [:span {:class (str class-prefix "-buttons")}]
+      (interleave (map create-form-button buttons) (cycle ["&nbsp;"]))))))
 
-(defn form-header [form-title submit-buttons]
+(defn form-header [form-title buttons]
   [:div {:class "form-header"}
    [:table
     [:tr
      [:td
       [:span {:class "form-title"} form-title]]
      [:td {:align "right"}
-      (submit-and-cancel-buttons "header" submit-buttons)]]]])
+      (display-buttons "header" buttons)]]]])
 
-(defn form-footer [submit-buttons]
+(defn form-footer [buttons]
   [:div {:class "form-footer"}
-   (submit-and-cancel-buttons "footer" submit-buttons)])
+   (display-buttons "footer" buttons)])
 
-(defn standard-form [title action submit-name body]
-  [:div {:class "sandbar-form"}
-   (form-to [:post (cpath action)]
-           (form-header title submit-name)
-           body
-           (form-footer submit-name))])
+(defmulti template (fn [& args] (first args)))
 
-(defn login-form [action submit-name body]
-  [:div {:class "sandbar-form"}
-   (form-to [:post (cpath action)]
-            [:div {:class "login-form"}
-             (conj (second body)
-                   [:tr
-                    [:td
-                     [:div {:class "login-buttons"}
-                      (submit-button submit-name)
-                      "&nbsp;&nbsp;"
-                      (reset-button "Reset")]]])])])
+(defmethod template :default [_ action options field-table]
+           (template :basic action options field-table))
 
-(defn form-cancelled? [params]
-  (let [cancel (get-param params :cancel)]
-    (contains? #{"cancel" "Cancel"} cancel)))
+(defmethod template :over-under [_ action {:keys [buttons title]} field-table]
+           (let [title (or title "Your Title Goes Here")
+                 buttons (or buttons [[:submit] [:cancel]])]
+             [:div {:class "sandbar-form"}
+             (form-to [:post (cpath action)]
+                      (form-header title buttons)
+                      field-table
+                      (form-footer buttons))]))
+
+(defn get-colspan [rows]
+  (let [cells (drop 1 (first rows))]
+    (reduce (fn [colspan cell]
+              (if (map? (second cell))
+                (+ colspan (Integer/valueOf (or (:colspan (second cell)) 1)))
+                (+ colspan 1)))
+            0
+            cells)))
+
+(defn append-buttons-to-table [div buttons]
+  (let [table (second div)
+        colspan (get-colspan (rest table))
+        new-table (conj table
+                        [:tr 
+                         [:td {:colspan colspan}
+                          [:div {:class "buttons"}
+                           (display-buttons "basic" buttons)]]])]
+    (apply vector (first div) new-table (drop 2 div))))
+
+(defmethod template :basic [_ action {:keys [buttons]} field-div]
+           (println field-div)
+           (let [buttons (or buttons [[:submit] [:reset]])]
+             [:div {:class "sandbar-form"}
+              (form-to [:post (cpath action)]
+                       (append-buttons-to-table field-div buttons))]))
+
+(defn form-cancelled?
+  ([params]
+     (form-cancelled? params "Cancel"))
+  ([params value]
+     (let [cancel-values (conj #{"cancel" "Cancel"} value)
+           cancel (get-param params :cancel)]
+       (contains? cancel-values cancel))))
 
 (defn field-label [title key req]
   (let [req (cond (keyword? req) req
@@ -180,7 +243,7 @@
       :field-name fname
       :html [:input
              (merge {:type "Text" :name (name fname) :value ""
-                     :class "sandbar-textfield"} options)]}))
+                     :class "textfield"} options)]}))
 
 (defn password
   "Use textfield to create a text field and then change it to a
@@ -530,8 +593,6 @@
                 chain)]
     (conj chain `clean-form-input)))
 
-;; The save and new value should not be the visible name
-
 (defmacro defform
   "Define a form and produce a function that will generate the form's routes."
   [resource uri & {:keys [fields on-cancel on-success load]
@@ -548,11 +609,15 @@
         on-success (or on-success `(fn [m#] ~uri))
         load (or load `(fn [id#] {}))
         ;; optional
+        style (or (:style options) :default)
         validator (or (:validator options) `identity)
         properties (or (:properties options) {})
         title (or (:title options) `(fn [t#] (or (~resource-id ~properties)
                                                  "Form")))
-        buttons (or (:buttons options) "Save")
+        buttons (or (:buttons options) [[:submit "Submit"] [:cancel "Cancel"]])
+        buttons (if (= (second (reverse buttons)) :labels)
+                  buttons
+                  (vec (concat buttons [:labels properties])))
         field-layout (or (:field-layout options) [1])]
     `(do
        (def ~fields-sym
@@ -562,16 +627,18 @@
          (-> ~@marshal-chain))
        (defn ~submit-sym [request#]
          (let [params# (:params request#)
-               uri# (:uri request#)]
+               uri# (:uri request#)
+               {cancel-val# :cancel and-new-val# :save-and-new}
+               (special-button-text ~buttons)]
            (redirect
-            (if (form-cancelled? params#)
+            (if (form-cancelled? params# cancel-val#)
               ~on-cancel
               (let [form-data# (~marshal-sym params#)
                     submit# (get-param params# :submit)]
                 (if-valid ~validator form-data#
                           (fn [m#]
                             (let [s# (~on-success m#)]
-                              (if (= submit# "Save and New")
+                              (if (and and-new-val# (= submit# and-new-val#))
                                 uri#
                                 s#)))
                           (store-errors-and-redirect ~resource-id uri#)))))))
@@ -581,15 +648,15 @@
                                 :edit (let [id# (get-param params# :id)]
                                         (~load id#))
                                 {})]
-           (standard-form
-            (~title type#)
-            ~uri
-            ~buttons
-            (form-layout-grid ~field-layout
-                              ~resource-id
-                              ~fields-sym
-                              request#
-                              form-data#))))
+           (template ~style
+                     ~uri
+                     {:title (~title type#)
+                      :buttons ~buttons}
+                     (form-layout-grid ~field-layout
+                                       ~resource-id
+                                       ~fields-sym
+                                       request#
+                                       form-data#))))
        (defn ~resource [layout#]
          (form-routes ~uri
                       (fn [request#]

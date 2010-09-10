@@ -86,18 +86,20 @@
         action (if (.endsWith (:uri request) "new") :new :edit)
         form-data (if (= action :new) {} (lookup-fn request))
         title (if (= action :new) "Create New User" "Edit User")]
-       (standard-form
-        title (name action) "Save"
-        (form-layout-grid [1 1 2 1 1 1]
-                          :user
-                          (conj
-                           (user-form-fields (data-fns :load) props)
-                           (hidden :id)
-                           (hidden :password))
-                          request
-                          (if (= action :edit)
-                            (assoc form-data :new_password "_unchanged")
-                            form-data)))))
+    (template :over-under
+              (name action)
+              {:title title
+               :buttons [[:save] [:cancel]]}
+              (form-layout-grid [1 1 2 1 1 1]
+                                :user
+                                (conj
+                                 (user-form-fields (data-fns :load) props)
+                                 (hidden :id)
+                                 (hidden :password))
+                                request
+                                (if (= action :edit)
+                                  (assoc form-data :new_password "_unchanged")
+                                  form-data)))))
 
 (defn create-user-from-params [load-fn params]
   (let [user (-> (get-params [:id :username :new_password :password

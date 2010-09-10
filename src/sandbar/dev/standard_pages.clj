@@ -19,18 +19,18 @@
      (let [list-item (find-by-id-fn type id)
            label-fn (fn [k] (try (label-fn k)
                                  (catch Exception _ (name k))))]
-       (standard-form
-        (str "Delete " (label-fn type))
-        "delete"
-        "Yes - Delete it"
-        [:div {:class "sandbar-confirm-delete"}
-         (if list-item
-           [:input {:type "Hidden" :name "id" :value id}])
-         [:div (str "Are you sure you want to delete the "
-                    (label-fn type)
-                    " named "
-                    (name-fn list-item)
-                    "?")]]))))
+       (template :over-under
+                 "delete"
+                 {:title (str "Delete " (label-fn type))
+                  :buttons [[:submit "Yes - Delete it"] [:cancel]]}
+                 [:div {:class "sandbar-confirm-delete"}
+                  (if list-item
+                    [:input {:type "Hidden" :name "id" :value id}])
+                  [:div (str "Are you sure you want to delete the "
+                             (label-fn type)
+                             " named "
+                             (name-fn list-item)
+                             "?")]]))))
 
 (defn page-not-found-404 []
   [:div

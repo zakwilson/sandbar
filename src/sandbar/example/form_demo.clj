@@ -35,6 +35,7 @@
    [:html
     [:head
      (stylesheet "sandbar.css")
+     (stylesheet "sandbar-forms.css")
      (icon "icon.png")]
     [:body
      [:h2 "Sandbar Form Example"]
@@ -67,20 +68,6 @@
       :ensure
       password-strength))
 
-;; -make sure the form always works so that you can build it up
-;; gradually
-;; -provide form field defaults
-;; -provide default values
-;; -specify the key of the id for the map
-;; -provide your own layout
-;; -provide your own buttons
-;; -You should be able to internationalize the title and the buttons
-;; -Add a text area
-;; -Add a select
-;; -Add a multi-select
-;; -Create a custom control
-;; -Hook it up to jQuery
-
 (forms/defform user-form "/user/edit"
   :fields [(forms/hidden :id)
            (forms/textfield :username)
@@ -88,6 +75,7 @@
            (forms/textfield :first-name :last-name :email)
            (forms/checkbox :account-enabled)
            (forms/multi-checkbox :roles (db/all-roles) name)]
+  :buttons [[:save] [:cancel]]
   :load #(db/find-user %)
   :on-cancel "/"
   :on-success
@@ -97,8 +85,8 @@
      "/")
   :validator validator
   :properties properties
+  :style :over-under
   :title #(case % :add "Create User" "Edit User")
-  :buttons {:save "Save and Close" :save-and-new "Save and New"}
   :field-layout [1 1 2 1 1 1])
 
 (defroutes routes

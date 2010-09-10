@@ -17,12 +17,12 @@
                                           session-delete-key!)]
                  [core :only (property-lookup)]
                  [validation :only (build-validator
-                                        non-empty-string
-                                        if-valid)])
+                                    non-empty-string
+                                    if-valid)])
         (sandbar.dev [forms :only (form-layout-grid
                                    textfield
                                    password
-                                   login-form
+                                   template
                                    get-params
                                    store-errors-and-redirect)])))
 
@@ -41,15 +41,17 @@
       (redirect "/login")))
 
 (defn login-page [adapter request]
-  (login-form
-   (:uri request)
-   "Login"
-   (form-layout-grid [1 1]
-                     :login
-                     [(textfield adapter :username {:size 25} :required)
-                      (password adapter :password {:size 25}  :required)]
-                     request
-                     {})))
+  (template :default
+            (:uri request)
+            {:buttons [[:submit "Login"]]}
+            (form-layout-grid [1 1]
+                              :login
+                              [(textfield adapter :username {:size 25}
+                                          :required)
+                               (password adapter :password {:size 25}
+                                         :required)]
+                              request
+                              {})))
 
 (defn login-validator [adapter]
   (let [pw-validator (validate-password adapter)]

@@ -100,14 +100,14 @@
 
 (defn form-textfield-fixture [field-name value]
   [:input {:size 35 :type "Text" :name field-name :value value
-           :class "sandbar-textfield"}])
+           :class "textfield"}])
 
 (defn form-hidden-fixture [field-name value]
   [:input {:type "hidden" :name field-name :value value}])
 
 (defn form-password-fixture [field-name value]
   [:input {:size 35 :type "Password" :name field-name :value value
-                 :class "sandbar-textfield"}])
+                 :class "textfield"}])
 
 (deftest test-form-textfield
   (are [args _ e-label exp-name exp-value]
@@ -132,9 +132,7 @@
        (test-form-req-label "f1") "name" ""
 
        [{:name "Name"} :name {:size 35} :required] :=>
-       (test-form-req-label "Name") "name" ""
-       
-       ))
+       (test-form-req-label "Name") "name" ""))
 
 (deftest test-form-password
   (are [args _ e-label exp-name exp-value]
@@ -159,9 +157,7 @@
        (test-form-req-label "f1") "name" ""
 
        [{:name "Name"} :name {:size 35} :required] :=>
-       (test-form-req-label "Name") "name" ""
-       
-       ))
+       (test-form-req-label "Name") "name" ""))
 
 (defn test-form-textarea [field-name value]
   (if (empty? value)
@@ -238,10 +234,9 @@
                  [[:div {:class "group-checkbox"}
                    [:input {:type "checkbox", :name :name, :value "a"} "a"]]
                   [:div {:class "group-checkbox"}
-                   [:input {:type "checkbox", :name :name, :value "b"} "b"]]]]]
-               )))))
+                   [:input {:type "checkbox", :name :name, :value "b"} "b"]]]]])))))
 
-#_(deftest test-form-layout
+(deftest test-form-layout
   (binding [*sandbar-session* (atom {})]
     (t "create form layout"
        (t "with a single required text field and no initial state"

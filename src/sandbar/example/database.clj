@@ -1,9 +1,9 @@
 (ns sandbar.example.database
   "In memory user database to support other examples.")
 
-(def db (atom {:id 1
-               :users {}
-               :roles #{:admin :user}}))
+(defonce db (atom {:id 1
+                   :users {}
+                   :roles #{:admin :user}}))
 
 (defn all-roles []
   (:roles @db))
