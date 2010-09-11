@@ -3,13 +3,25 @@
 
 (defonce db (atom {:id 1
                    :users {}
-                   :roles #{:admin :user}}))
+                   :roles #{:admin :user}
+                   :regions #{{:id 1 :value "North America"}
+                              {:id 2 :value "South America"}
+                              {:id 3 :value "Europe"}
+                              {:id 4 :value "Australia"}}}
+                  :languages #{{:id 1 :name "Clojure"}
+                               {:id 2 :name "Ruby"}
+                               {:id 3 :name "Java"}
+                               {:id 4 :name "C"}
+                               {:id 5 :name "Go"}}))
 
 (defn all-roles []
   (:roles @db))
 
 (defn all-users []
   (map val (:users @db)))
+
+(defn all-regions []
+  (:regions @db))
 
 (defn store-user [user]
   (swap! db

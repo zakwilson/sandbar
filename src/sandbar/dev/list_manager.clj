@@ -11,8 +11,8 @@
   (:use (ring.util [response :only (redirect)])
         (compojure core) 
         (hiccup core page-helpers)
-        (sandbar core stateful-session validation)
-        (sandbar.dev forms tables standard-pages))
+        (sandbar core stateful-session validation forms)
+        (sandbar.dev tables standard-pages))
   (:require [clojure.contrib.str-utils2 :as string]))
 
 ;;

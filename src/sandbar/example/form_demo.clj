@@ -27,7 +27,8 @@
       :roles "Roles"
       :admin "Administrator"
       :user "User"
-      :password-validation-error "Password must have at least 10 chars."})
+      :password-validation-error "Password must have at least 10 chars."
+      :region "Region"})
 
 (defn layout [content]
   (html
@@ -69,12 +70,15 @@
       password-strength))
 
 (forms/defform user-form "/user/edit"
-  :fields [(forms/hidden :id)
-           (forms/textfield :username)
-           (forms/password :password)
-           (forms/textfield :first-name :last-name :email)
-           (forms/checkbox :account-enabled)
-           (forms/multi-checkbox :roles (db/all-roles) name)]
+  :fields [(hidden :id)
+           (textfield :username)
+           (password :password)
+           (textfield :first-name :last-name :email)
+           (checkbox :account-enabled)
+           (multi-checkbox :roles (db/all-roles) name)
+           (select :region
+                   (db/all-regions)
+                   {:id :value :prompt {"" "Select a Region"}})]
   :buttons [[:save] [:cancel]]
   :load #(db/find-user %)
   :on-cancel "/"

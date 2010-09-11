@@ -115,7 +115,9 @@
 
 (defn get-param
   "Get a parameter from the params map where the key may be a string or
-   a keyword."
+   a keyword. Automatically coerce numbers."
   [params key]
-  (or (get params key) (get params (name key))))
-
+  (let [p (or (get params key) (get params (name key)))]
+    (try (Integer/parseInt p)
+         (catch Exception _ (try (BigDecimal. p)
+                                 (catch Exception _ p))))))

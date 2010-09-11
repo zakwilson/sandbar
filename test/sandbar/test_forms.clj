@@ -6,11 +6,10 @@
 ;; the terms of this license.
 ;; You must not remove this notice, or any other, from this software.
 
-(ns sandbar.dev.test-forms
+(ns sandbar.test-forms
   (:use (clojure test)
-        (sandbar core stateful-session util
-                 [test :only (t)])
-        (sandbar.dev forms)))
+        (sandbar core stateful-session util forms
+                 [test :only (t)])))
 
 (deftest test-get-yes-no-fields
   (t "get yes/no fields"
@@ -428,4 +427,7 @@
   (is (= (get-params [:a :b] {:a "a" :b "b"})
          {:a "a" :b "b"}))
   (is (= (get-params [:a :b] {"c" "c" :a "a" :b "b"})
-         {:a "a" :b "b"})))
+         {:a "a" :b "b"}))
+  (is (= (get-params [:a :b :c :d :e] {:a "a" :b "2" :c "3.4" :d "5t"
+                                       "e" "3.5t"})
+         {:a "a" :b 2 :c 3.4 :d "5t" :e "3.5t"})))

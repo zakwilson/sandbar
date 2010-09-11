@@ -6,7 +6,7 @@
 ;; the terms of this license.
 ;; You must not remove this notice, or any other, from this software.
 
-(ns sandbar.dev.forms
+(ns sandbar.forms
   "Forms and form layouts."
   (:use [ring.util.response :only [redirect]]
         [compojure.core :only [routes GET POST]]
@@ -195,7 +195,6 @@
     (apply vector (first div) new-table (drop 2 div))))
 
 (defmethod template :basic [_ action {:keys [buttons]} field-div]
-           (println field-div)
            (let [buttons (or buttons [[:submit] [:reset]])]
              [:div {:class "sandbar-form"}
               (form-to [:post (cpath action)]
@@ -210,7 +209,10 @@
        (contains? cancel-values cancel))))
 
 (defn field-label [title key req]
-  (let [req (cond (keyword? req) req
+  (let [title (if (map? title)
+                (property-lookup title key)
+                title)
+        req (cond (keyword? req) req
                   (contains? (set req) key) :required
                   :else :optional)]
     [:div {:class "field-label"} title
@@ -235,11 +237,7 @@
                            (textfield title fname {:size 35} options)))
   ([title fname options req]
      {:type :textfield
-      :label (field-label (if (map? title)
-                                 (property-lookup title fname)
-                                 title)
-                          fname
-                          req)
+      :label (field-label title fname req)
       :field-name fname
       :html [:input
              (merge {:type "Text" :name (name fname) :value ""
@@ -342,17 +340,27 @@
   (apply merge (map #(sorted-map (key-key %) (value-key %)) coll)))
 
 (defn select
-  ([title fname k v coll opts top]
-     (select title fname k v coll opts top :optional))
-  ([title fname k v coll opts top req]
-     (let [s-map (select-map coll k v)]
+  "Create a select form element."
+  ([title fname coll kvs & optional]
+     (let [key-and-value (first (dissoc kvs :prompt))
+           prompt (first (:prompt kvs))
+           k (key key-and-value)
+           v (val key-and-value)
+           opts (first (filter map? optional))
+           req (first (filter #(not (map? %)) optional))
+           s-map (select-map coll k v)
+           select-html [:select (merge {:name (name fname)} opts)]
+           select-html (if prompt
+                         (concat select-html
+                                 [[:option
+                                   {:value (key prompt)} (val prompt)]])
+                         select-html)]
        {:type :select
         :label (field-label title fname req)
         :field-name fname
         :html (vec
                (concat
-                [:select (merge {:name (name fname)} opts)]
-                [[:option {:value (key (first top))} (val (first top))]] 
+                select-html
                 (map #(vector :option {:value (key %)} (val %))
                      s-map)))})))
 
@@ -505,6 +513,11 @@
        (form-layout-grid* layout form-state coll)
        (form-layout-grid* layout {:form-data init-data} coll))))
 
+(defn nil-or-empty-string? [v]
+  (or (not v)
+      (and (string? v)
+           (empty? v))))
+
 ;; TODO - This should preserve metadata
 
 (defn clean-form-input
@@ -513,12 +526,10 @@
   (apply merge
          (map #(hash-map (first %)
                          (let [value (last %)]
-                           (if (and (not (keyword? value))
-                                    (empty? value))
+                           (if (nil-or-empty-string? value)
                              nil
                              value)))
-              (if (and (:id m)
-                       (not (empty? (:id m))))
+              (if (not (nil-or-empty-string? (:id m)))
                 m
                 (dissoc m :id)))))
 
@@ -534,14 +545,24 @@
          request
          (submit-fn request))))
 
-(defn- field-def [type props name attrs]
-  (if (empty? attrs)
-    (list type props name)
-    (list type props name attrs)))
+(defn- in-form-ns [type]
+  (symbol (str "sandbar.dev.forms/" type)))
+
+(defn- field-def
+  ([type name]
+     (field-def type nil name nil))
+  ([type props name attrs]
+     (let [type (in-form-ns type)]
+       (cond (nil? props) (list type name)
+             (empty? attrs) (list type props name)
+             :else (list type props name attrs)))))
 
 (defn- expand-field
   ([type props fields attrs]
-     (cond (= (name type) "multi-checkbox") [(apply list type props fields)]
+     (cond (= (name type) "multi-checkbox")
+           [(apply list (in-form-ns type) props fields)]
+           (= (name type) "select")
+           [(apply list (in-form-ns type) props (concat fields [attrs]))]
            (> (count fields) 1) (map #(field-def type props % attrs) fields)
            :else [(field-def type props (first fields) attrs)]))
   ([type props fields attrs required]
@@ -554,7 +575,8 @@
                           [f a] (if (map? (last r))
                                   [(butlast r) (last r)]
                                   [r {}])]
-                      (cond (= (name t) "hidden") [%]
+                      (cond (= (name t) "hidden")
+                            [(field-def t (last %))]
                             (contains? #{"checkbox" "multi-checkbox"} (name t))
                             (expand-field t p f a)
                             :else (expand-field t p f a v)))

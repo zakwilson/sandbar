@@ -10,7 +10,7 @@
   "Pages that are not specific to a single application and may be refered to
    within the sandbar library."
   (:use (hiccup core)
-        (sandbar.dev forms)))
+        (sandbar forms)))
 
 (defn confirm-delete
   ([find-by-id-fn type label-fn id]

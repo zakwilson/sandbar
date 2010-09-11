@@ -14,10 +14,10 @@
                  util
                  stateful-session
                  validation
+                 forms
                  form-authentication
                  [auth :only (hash-password)])
-        (sandbar.dev forms
-                     tables 
+        (sandbar.dev tables 
                      standard-pages)))
 
 (defn secure-user

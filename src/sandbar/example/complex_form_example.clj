@@ -27,7 +27,8 @@
       :roles "Roles"
       :admin "Administrator"
       :user "User"
-      :password-validation-error "Password must have at least 10 chars."})
+      :password-validation-error "Password must have at least 10 chars."
+      :region "Region"})
 
 (defn layout [content]
   (html
@@ -77,11 +78,15 @@
       (forms/textfield properties :last-name :required)
       (forms/textfield properties :email :required)
       (forms/checkbox properties :account-enabled)
-      (forms/multi-checkbox properties :roles (db/all-roles) identity)])
+      (forms/multi-checkbox properties :roles (db/all-roles) identity)
+      (forms/select properties
+                    :region
+                    (db/all-regions)
+                    {:id :value :prompt {"" "Select a Region"}})])
 
 (defn marshal-user [params]
   (-> (forms/get-params [:id :username :password :first-name
-                         :last-name :email]
+                         :last-name :email :region]
                         params)
       (forms/get-yes-no-fields params #{:account-enabled})
       (forms/get-multi-checkbox params :roles (db/all-roles) name)

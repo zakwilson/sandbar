@@ -18,8 +18,8 @@
                  [core :only (property-lookup)]
                  [validation :only (build-validator
                                     non-empty-string
-                                    if-valid)])
-        (sandbar.dev [forms :only (form-layout-grid
+                                    if-valid)]
+                 [forms :only (form-layout-grid
                                    textfield
                                    password
                                    template
