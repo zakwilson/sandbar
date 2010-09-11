@@ -7,12 +7,12 @@
                    :regions #{{:id 1 :value "North America"}
                               {:id 2 :value "South America"}
                               {:id 3 :value "Europe"}
-                              {:id 4 :value "Australia"}}}
-                  :languages #{{:id 1 :name "Clojure"}
-                               {:id 2 :name "Ruby"}
-                               {:id 3 :name "Java"}
-                               {:id 4 :name "C"}
-                               {:id 5 :name "Go"}}))
+                              {:id 4 :value "Australia"}}
+                   :languages #{{:id 1 :name "Clojure"}
+                                {:id 2 :name "Ruby"}
+                                {:id 3 :name "Java"}
+                                {:id 4 :name "C"}
+                                {:id 5 :name "Go"}}}))
 
 (defn all-roles []
   (:roles @db))
@@ -22,6 +22,9 @@
 
 (defn all-regions []
   (:regions @db))
+
+(defn all-langs []
+  (:languages @db))
 
 (defn store-user [user]
   (swap! db

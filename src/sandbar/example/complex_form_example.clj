@@ -10,11 +10,11 @@
                                          set-flash-value!
                                          get-flash-value]]
         [sandbar.core :only [icon stylesheet get-param]]
+        [sandbar.forms :as forms]
         [sandbar.validation :only [build-validator non-empty-string
                                    if-valid
                                    add-validation-error]])
   (:require [compojure.route :as route]
-            [sandbar.dev.forms :as forms]
             [sandbar.example.database :as db]))
 
 (def properties
@@ -28,7 +28,9 @@
       :admin "Administrator"
       :user "User"
       :password-validation-error "Password must have at least 10 chars."
-      :region "Region"})
+      :region "Region"
+      :notes "Notes"
+      :languages "Languages"})
 
 (defn layout [content]
   (html
@@ -82,14 +84,20 @@
       (forms/select properties
                     :region
                     (db/all-regions)
-                    {:id :value :prompt {"" "Select a Region"}})])
+                    {:id :value :prompt {"" "Select a Region"}})
+      (forms/multi-select properties
+                          :languages
+                          (db/all-langs)
+                          {:id :name})
+      (forms/textarea properties :notes {:rows 5 :cols 80})])
 
 (defn marshal-user [params]
   (-> (forms/get-params [:id :username :password :first-name
-                         :last-name :email :region]
+                         :last-name :email :region :notes]
                         params)
       (forms/get-yes-no-fields params #{:account-enabled})
       (forms/get-multi-checkbox params :roles (db/all-roles) name)
+      (forms/get-multi-select params :languages (db/all-langs) :id)
       forms/clean-form-input))
 
 (defn form-submission [{:keys [params uri]}]
@@ -116,7 +124,7 @@
                      "/user/edit"
                      {:title (case type :add "Create User" "Edit User")
                       :buttons [[:save] [:cancel]]}
-                     (forms/form-layout-grid [1 1 2 1 1 1]
+                     (forms/form-layout-grid [1 1 2 1 1 1 2 1]
                                              :user
                                              (case type
                                                    :add user-form-fields

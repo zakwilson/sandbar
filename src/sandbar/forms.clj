@@ -219,6 +219,7 @@
      (if (= req :required) [:span {:class "required"} "*"] "")]))
 
 (defn textarea
+  ([title fname] (textarea title fname {} :optional))
   ([title fname options] (textarea title fname options :optional))
   ([title fname options req]
      {:type :textarea
@@ -294,9 +295,9 @@
 (defn multi-checkbox
   ([props many-spec]
      (multi-checkbox props
-                          (:alias many-spec)
-                          ((:all-items many-spec))
-                          (:name-fn many-spec)))
+                     (:alias many-spec)
+                     ((:all-items many-spec))
+                     (:name-fn many-spec)))
   ([props fname coll value-fn]
      {:type :multi-checkbox
       :label [:span {:class "group-title"} (property-lookup props fname)]
@@ -362,7 +363,20 @@
                (concat
                 select-html
                 (map #(vector :option {:value (key %)} (val %))
-                     s-map)))})))
+                     s-map)))
+        :value-fn k})))
+
+(defn multi-select [title fname coll kv & optional]
+  (let [kv (dissoc kv :prompt)
+        opts (merge {:multiple true :size 5} (first (filter map? optional)))
+        req (first (filter #(not (map? %)) optional))]
+    (select title fname coll kv opts req)))
+
+(defn get-multi-select
+  "Add the key k to the map m where the value of k is a vector of
+   selected values."
+  [m params k all-values name-fn]
+  (get-multi-checkbox m params k all-values name-fn))
 
 (defmulti set-form-field-value (fn [a b] (:type b)))
 
@@ -413,14 +427,18 @@
 (defmethod set-form-field-value :select [form-state input-field]
   (let [field-name (:field-name input-field)
         input-html (:html input-field)
-        previous-val ((keyword field-name) (:form-data form-state))]
-    (if previous-val
+        previous-val ((keyword field-name) (:form-data form-state))
+        value-set (set (if (coll? previous-val)
+                         (map #((:value-fn input-field) %) previous-val)
+                         [previous-val]))]
+    (if (seq value-set)
       (assoc input-field :html
              (apply vector
                     (map #(if (and (vector? %)
                                    (= :option (first %))
-                                   (= previous-val (:value (second %))))
-                            [:option {:value previous-val :selected "selected"}
+                                   (contains? value-set (:value (second %))))
+                            [:option {:value (:value (second %))
+                                      :selected "selected"}
                              (last %)]
                             %)
                          input-html)))
@@ -545,24 +563,20 @@
          request
          (submit-fn request))))
 
-(defn- in-form-ns [type]
-  (symbol (str "sandbar.dev.forms/" type)))
-
 (defn- field-def
   ([type name]
      (field-def type nil name nil))
   ([type props name attrs]
-     (let [type (in-form-ns type)]
-       (cond (nil? props) (list type name)
-             (empty? attrs) (list type props name)
-             :else (list type props name attrs)))))
+     (cond (nil? props) (list type name)
+           (empty? attrs) (list type props name)
+           :else (list type props name attrs))))
 
 (defn- expand-field
   ([type props fields attrs]
      (cond (= (name type) "multi-checkbox")
-           [(apply list (in-form-ns type) props fields)]
+           [(apply list type props fields)]
            (= (name type) "select")
-           [(apply list (in-form-ns type) props (concat fields [attrs]))]
+           [(apply list type props (concat fields [attrs]))]
            (> (count fields) 1) (map #(field-def type props % attrs) fields)
            :else [(field-def type props (first fields) attrs)]))
   ([type props fields attrs required]

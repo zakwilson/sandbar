@@ -113,11 +113,16 @@
   ([path name mouseover attrs]
      (link-to (str (cpath path)) (image name mouseover attrs))))
 
+(defn- filter-param-value [v]
+  (try (Integer/parseInt v)
+       (catch Exception _ (try (BigDecimal. v)
+                               (catch Exception _ v)))))
+
 (defn get-param
   "Get a parameter from the params map where the key may be a string or
    a keyword. Automatically coerce numbers."
   [params key]
   (let [p (or (get params key) (get params (name key)))]
-    (try (Integer/parseInt p)
-         (catch Exception _ (try (BigDecimal. p)
-                                 (catch Exception _ p))))))
+    (cond (string? p) (filter-param-value p)
+          (coll? p) (map filter-param-value p)
+          :else p)))

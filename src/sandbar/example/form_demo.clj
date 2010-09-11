@@ -9,12 +9,12 @@
         [sandbar.stateful-session :only [wrap-stateful-session
                                          set-flash-value!]]
         [sandbar.core :only [icon stylesheet get-param]]
+        [sandbar.forms :as forms]
         [sandbar.validation :only [build-validator
                                    non-empty-string
                                    if-valid
                                    add-validation-error]])
   (:require [compojure.route :as route]
-            [sandbar.dev.forms :as forms]
             [sandbar.example.database :as db]))
 
 (def properties
@@ -28,7 +28,8 @@
       :admin "Administrator"
       :user "User"
       :password-validation-error "Password must have at least 10 chars."
-      :region "Region"})
+      :region "Region"
+      :notes "Notes"})
 
 (defn layout [content]
   (html
@@ -69,16 +70,19 @@
       :ensure
       password-strength))
 
+;; Add multi-select to this example
+
 (forms/defform user-form "/user/edit"
-  :fields [(hidden :id)
-           (textfield :username)
-           (password :password)
-           (textfield :first-name :last-name :email)
-           (checkbox :account-enabled)
-           (multi-checkbox :roles (db/all-roles) name)
-           (select :region
-                   (db/all-regions)
-                   {:id :value :prompt {"" "Select a Region"}})]
+  :fields [(forms/hidden :id)
+           (forms/textfield :username)
+           (forms/password :password)
+           (forms/textfield :first-name :last-name :email)
+           (forms/checkbox :account-enabled)
+           (forms/multi-checkbox :roles (db/all-roles) name)
+           (forms/select :region
+                         (db/all-regions)
+                         {:id :value :prompt {"" "Select a Region"}})
+           (forms/textarea :notes {:rows 5 :cols 70})]
   :buttons [[:save] [:cancel]]
   :load #(db/find-user %)
   :on-cancel "/"
@@ -91,7 +95,7 @@
   :properties properties
   :style :over-under
   :title #(case % :add "Create User" "Edit User")
-  :field-layout [1 1 2 1 1 1])
+  :field-layout [1 1 2 1 1 1 1])
 
 (defroutes routes
   (user-form (fn [_ form] (layout form)))
