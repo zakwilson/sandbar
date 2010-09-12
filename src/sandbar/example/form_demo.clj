@@ -29,7 +29,8 @@
       :user "User"
       :password-validation-error "Password must have at least 10 chars."
       :region "Region"
-      :notes "Notes"})
+      :notes "Notes"
+      :languages "Languages"})
 
 (defn layout [content]
   (html
@@ -82,6 +83,10 @@
            (forms/select :region
                          (db/all-regions)
                          {:id :value :prompt {"" "Select a Region"}})
+           (forms/multi-select :languages
+                               (db/all-langs)
+                               {:id :name}
+                               {:class "something"})
            (forms/textarea :notes {:rows 5 :cols 70})]
   :buttons [[:save] [:cancel]]
   :load #(db/find-user %)
@@ -95,7 +100,12 @@
   :properties properties
   :style :over-under
   :title #(case % :add "Create User" "Edit User")
-  :field-layout [1 1 2 1 1 1 1])
+  :field-layout [1 1 2 1 1 1 2 1])
+
+#_(forms/extend user-form :with admin-form
+    :when (fn [request form-data]
+            (admin? request))
+    :fields [(forms/textarea :admin-notes {:rows 5 :cols 70})])
 
 (defroutes routes
   (user-form (fn [_ form] (layout form)))

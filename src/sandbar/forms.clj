@@ -319,7 +319,8 @@
    selected values."
   [m params k all-values name-fn]
   (let [v (get-param params k)
-        selected-values (set (filter-nil-vec (if (string? v) [v] v)))
+        selected-values (set (filter-nil-vec (if (or (number? v)
+                                                     (string? v)) [v] v)))
         selected (filter #(contains? selected-values (name-fn %)) all-values)]
     (assoc m k selected)))
 
@@ -375,8 +376,9 @@
 (defn get-multi-select
   "Add the key k to the map m where the value of k is a vector of
    selected values."
-  [m params k all-values name-fn]
-  (get-multi-checkbox m params k all-values name-fn))
+  [m params k all-values name-fn & more]
+  (let [name-fn (if (map? name-fn) (key (first name-fn)) name-fn)]
+    (get-multi-checkbox m params k all-values name-fn)))
 
 (defmulti set-form-field-value (fn [a b] (:type b)))
 
@@ -575,7 +577,7 @@
   ([type props fields attrs]
      (cond (= (name type) "multi-checkbox")
            [(apply list type props fields)]
-           (= (name type) "select")
+           (contains? #{"select" "multi-select"} (name type))
            [(apply list type props (concat fields [attrs]))]
            (> (count fields) 1) (map #(field-def type props % attrs) fields)
            :else [(field-def type props (first fields) attrs)]))
@@ -606,9 +608,11 @@
   (reduce (fn [m next]
             (let [type (name (first next))
                   r (rest next)]
-              (cond (.endsWith type "multi-checkbox")
-                    (assoc m :multi (conj (:multi m) r))
-                    (.endsWith type "checkbox")
+              (cond (= type "multi-checkbox")
+                    (assoc m :multi-checkbox (conj (:multi m) r))
+                    (= type "multi-select")
+                    (assoc m :multi-select (conj (:multi m) r))
+                    (= type "checkbox")
                     (assoc m :yes-no (concat (:yes-no m)
                                              (filter keyword? r)))
                     :else
@@ -623,9 +627,13 @@
         chain (if-let [yes-no (:yes-no categorized-fields)]
                 (conj chain (list `get-yes-no-fields p (set yes-no)))
                 chain)
-        chain (if-let [multi (:multi categorized-fields)]
+        chain (if-let [multi (:multi-checkbox categorized-fields)]
                 (apply conj chain
                        (map #(apply list `get-multi-checkbox p %) multi))
+                chain)
+        chain (if-let [multi (:multi-select categorized-fields)]
+                (apply conj chain
+                       (map #(apply list `get-multi-select p %) multi))
                 chain)]
     (conj chain `clean-form-input)))
 
