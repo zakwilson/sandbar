@@ -433,3 +433,10 @@
          {:a "a" :b 2 :c 3.4 :d "5t" :e "3.5t"}))
   (is (= (get-params [:a :b] {:a ["1" "2" "3.5"] :b ["a" "2" "4.5t"]})
          {:a [1 2 3.5] :b ["a" 2 "4.5t"]})))
+
+(deftest test-clean-form-input
+  (is (= (clean-form-input {:id "" :name "" :age 10})
+         {:name nil :age 10}))
+  (is (= (meta (clean-form-input
+                (with-meta {:id "" :name "" :age 10} {:a "a"})))
+         {:a "a"})))

@@ -473,7 +473,7 @@
                                    label])]
     (if error-message
       [:div
-       [:div {:class "error-message"} error-message]
+       [:div.error-message error-message]
        field-row]
       field-row)))
 
@@ -484,7 +484,7 @@
                    (:html (set-form-field-value form-state m)))]
     (if error-message
       [:div
-       [:div {:class "error-message"} error-message]
+       [:div.error-message error-message]
        label field-row]
       [:div label field-row])))
 
@@ -496,7 +496,7 @@
     (if error-message
       [:div
        label
-       [:div {:class "error-message"} error-message]
+       [:div.error-message error-message]
        field-row]
       [:div label field-row])))
 
@@ -505,11 +505,16 @@
 
 (def one-column-layout (repeat 1))
 
-;; TODO: Display all of the form messages. Not just the first one.
-(defn form-layout-grid* [layout form-state coll]
+(defmulti display-form-errors (fn [& args] (first args)))
+
+(defmethod display-form-errors :default [form-name form-errors]
+           [:div.form-error-message
+            (map #(vector :div %) form-errors)])
+
+(defn form-layout-grid* [form-name layout form-state coll]
   (let [div (if-let [form-errors (:form form-state)]
-              [:div (let [messages (first form-errors)]
-                      [:div {:class "warning"} messages])]
+              [:div
+               (display-form-errors form-name form-errors)]
               [:div])
         the-form
         (conj div 
@@ -530,28 +535,29 @@
      (form-layout-grid layout form-name coll request {}))
   ([layout form-name coll request init-data]
      (if-let [form-state (get-flash-value form-name)]
-       (form-layout-grid* layout form-state coll)
-       (form-layout-grid* layout {:form-data init-data} coll))))
+       (form-layout-grid* form-name layout form-state coll)
+       (form-layout-grid* form-name layout {:form-data init-data} coll))))
 
 (defn nil-or-empty-string? [v]
   (or (not v)
       (and (string? v)
            (empty? v))))
 
-;; TODO - This should preserve metadata
-
 (defn clean-form-input
   "Set empty values to nil and remove the id if it is nil."
   [m]
-  (apply merge
-         (map #(hash-map (first %)
-                         (let [value (last %)]
-                           (if (nil-or-empty-string? value)
-                             nil
-                             value)))
-              (if (not (nil-or-empty-string? (:id m)))
-                m
-                (dissoc m :id)))))
+  (let [original-meta (meta m)]
+    (with-meta
+      (apply merge
+             (map #(hash-map (first %)
+                             (let [value (last %)]
+                               (if (nil-or-empty-string? value)
+                                 nil
+                                 value)))
+                  (if (not (nil-or-empty-string? (:id m)))
+                    m
+                    (dissoc m :id))))
+      original-meta)))
 
 ;;
 ;; Making forms easier

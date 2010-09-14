@@ -7,7 +7,8 @@
         [hiccup.core :only [html]]
         [hiccup.page-helpers :only [doctype link-to]]
         [sandbar.stateful-session :only [wrap-stateful-session
-                                         set-flash-value!]]
+                                         set-flash-value!
+                                         get-flash-value]]
         [sandbar.core :only [icon stylesheet get-param]]
         [sandbar.forms :as forms]
         [sandbar.validation :only [build-validator
@@ -42,6 +43,8 @@
      (stylesheet "sandbar-forms.css")
      (icon "icon.png")]
     [:body
+     (if-let [m (get-flash-value :user-message)]
+       [:div {:class "message"} m])
      [:h2 "Sandbar Form Example"]
      content]]))
 
@@ -65,12 +68,24 @@
     (add-validation-error m :password properties)
     m))
 
+(defn username-strength [m]
+  (if (< (count (:username m)) 5)
+    (add-validation-error m "Username must have more than 5 characters.")
+    m))
+
+(defn email-strength [m]
+  (if (< (count (:email m)) 2)
+    (add-validation-error m "Real email addresses must have more than 2 char.")
+    m))
+
 (def validator
      (build-validator
       (non-empty-string :username :password :first-name :last-name :email
                         properties)
       :ensure
-      password-strength))
+      password-strength
+      username-strength
+      email-strength))
 
 (def admin-form-validator
      (build-validator
