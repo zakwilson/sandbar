@@ -30,7 +30,8 @@
       :password-validation-error "Password must have at least 10 chars."
       :region "Region"
       :notes "Notes"
-      :languages "Languages"})
+      :languages "Languages"
+      :admin-notes "Administrator Notes"})
 
 (defn layout [content]
   (html
@@ -71,7 +72,9 @@
       :ensure
       password-strength))
 
-;; Add multi-select to this example
+(def admin-form-validator
+     (build-validator
+      (non-empty-string :admin-notes properties)))
 
 (forms/defform user-form "/user/edit"
   :fields [(forms/hidden :id)
@@ -100,15 +103,31 @@
   :properties properties
   :style :over-under
   :title #(case % :add "Create User" "Edit User")
-  :field-layout [1 1 2 1 1 1 2 1])
+  :field-layout [1 1 2 1 1 1 2 1]
+  :defaults {:username "something"
+             :roles [:user]
+             :account-enabled "Y"
+             :region 2
+             :languages [{:id 1 :name "Clojure"}]})
 
-#_(forms/extend user-form :with admin-form
-    :when (fn [request form-data]
-            (admin? request))
-    :fields [(forms/textarea :admin-notes {:rows 5 :cols 70})])
+;; The commented code below works. Create some new examples that show
+;; how to use these in a real scenario.
+
+#_(forms/extend-form user-form :with admin-form
+    :when (fn [action request form-data]
+            (or (= action :edit)
+                (get-param (-> request :params) :admin-notes)))
+    :fields [(forms/textarea :admin-notes {:rows 5 :cols 70})]
+    :validator admin-form-validator)
+
+#_(forms/extend-form user-form :with admin-form
+    :at "/user-two/edit"
+    :fields [(forms/textarea :admin-notes {:rows 5 :cols 70})]
+    :validator admin-form-validator)
 
 (defroutes routes
   (user-form (fn [_ form] (layout form)))
+  #_(admin-form (fn [_ form] (layout form)))
   (GET "/" [] (home))
   (route/not-found "<h1>Not Found</h1>"))
 

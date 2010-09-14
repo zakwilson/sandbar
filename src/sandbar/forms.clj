@@ -14,7 +14,7 @@
         [sandbar.stateful-session :only [set-flash-value!
                                          get-flash-value]]
         [sandbar.core :only [cpath get-param property-lookup]]
-        [sandbar.validation :only [if-valid required-fields]])
+        [sandbar.validation :only [if-valid required-fields build-validator]])
   (:require [compojure.route :as route]
             [clojure.string :as string]))
 
@@ -637,17 +637,50 @@
                 chain)]
     (conj chain `clean-form-input)))
 
+(defn- form-routes-function [resource uri view submit default]
+  `(defn ~resource [layout#]
+     (form-routes ~uri
+                  (fn [request#]
+                    (layout# request#
+                             (~view :add request# ~default)))
+                  (fn [request#]
+                    (layout# request#
+                             (~view :edit request# ~default)))
+                  (fn [request#]
+                    (~submit request# ~default)))))
+
+(defn- form-symbol-map
+  "Produce common symbols that are used by both defform and extend-form.
+   This function memoized below to ensure that the the symbols which are
+   produced are always the same for a given resource."
+  [resource]
+  {:resource-id (keyword (name resource))
+   :properties-def (gensym "properties_")
+   :get-fields (gensym "get_fields_")
+   :atom (gensym "types_")
+   :marshal (gensym "marshal_")
+   :get-validator (gensym "get_validator_")
+   :view (gensym "view_")
+   :submit (gensym "submit_")})
+
+(def form-symbol-map-memo (memoize form-symbol-map))
+
 (defmacro defform
   "Define a form and produce a function that will generate the form's routes."
   [resource uri & {:keys [fields on-cancel on-success load]
                    :as options}]
-  (let [resource-id (keyword (name resource))
-        fields-sym (symbol (str (name resource) "-fields"))
-        marshal-sym (symbol (str (name resource) "-marshal"))
-        submit-sym (symbol (str (name resource) "-submit"))
-        view-sym (symbol (str (name resource) "-view"))
+  (let [{:keys [resource-id properties-def get-fields atom marshal
+                get-validator view submit]}
+        (form-symbol-map-memo resource)
+        fields-sym (gensym "fields_")
+        type-fn-sym (gensym "type_")
         params- (gensym "params_")
         marshal-chain (build-marshal-chain params- fields)
+        ;; multimethods
+        dispatch-sym (gensym "dispatch_")
+        get-layout-sym (gensym "get_layout_")
+        get-title-sym (gensym "get_title_")
+        get-buttons-sym (gensym "get_buttons_")
         ;; semi-optional
         on-cancel (or on-cancel uri)
         on-success (or on-success `(fn [m#] ~uri))
@@ -662,49 +695,123 @@
         buttons (if (= (second (reverse buttons)) :labels)
                   buttons
                   (vec (concat buttons [:labels properties])))
-        field-layout (or (:field-layout options) [1])]
+        field-layout (or (:field-layout options) [1])
+        default-data (or (:defaults options) {})]
     `(do
+       (def ~properties-def
+            ~properties)
        (def ~fields-sym
-            (field-list ~validator ~properties
+            (field-list ~validator ~properties-def
                         ~@fields))
-       (defn ~marshal-sym [~params-]
-         (-> ~@marshal-chain))
-       (defn ~submit-sym [request#]
+       (def ~atom (atom '()))
+       (defn ~type-fn-sym [action# request# form-data# default#]
+         (or (first (filter (fn [x#] (not (= x# :default)))
+                            (map (fn [f#] (f# action# request# form-data#))
+                                 @~atom)))
+             default#))
+       (defn ~dispatch-sym [& args#] (first args#))
+       (defmulti ~get-fields ~dispatch-sym)
+       (defmulti ~marshal ~dispatch-sym)
+       (defmulti ~get-layout-sym ~dispatch-sym)
+       (defmulti ~get-validator ~dispatch-sym)
+       (defmulti ~get-title-sym ~dispatch-sym)
+       (defmulti ~get-buttons-sym ~dispatch-sym)
+       (defmethod ~get-fields :default [form-type#]
+                  ~fields-sym)
+       (defmethod ~marshal :default [form-type# ~params-]
+                  (-> ~@marshal-chain))
+       (defmethod ~get-layout-sym :default [form-type#]
+                  ~field-layout)
+       (defmethod ~get-validator :default [form-type#]
+                  ~validator)
+       (defmethod ~get-title-sym :default [form-type# type#]
+                  (~title type#))
+       (defmethod ~get-buttons-sym :default [form-type#]
+                  ~buttons)
+       (defn ~submit [request# default-type#]
          (let [params# (:params request#)
                uri# (:uri request#)
                {cancel-val# :cancel and-new-val# :save-and-new}
-               (special-button-text ~buttons)]
+               (special-button-text ~buttons)
+               form-type# (~type-fn-sym :marshal request# {} default-type#)]
            (redirect
             (if (form-cancelled? params# cancel-val#)
               ~on-cancel
-              (let [form-data# (~marshal-sym params#)
-                    submit# (get-param params# :submit)]
-                (if-valid ~validator form-data#
+              (let [form-data# (~marshal form-type# params#)
+                    failure# (get (:headers request#) "referer")
+                    submit# (get-param params# :submit)
+                    form-type# (~type-fn-sym :validate
+                                             request#
+                                             form-data#
+                                             default-type#)]
+                (if-valid (~get-validator form-type#) form-data#
                           (fn [m#]
                             (let [s# (~on-success m#)]
                               (if (and and-new-val# (= submit# and-new-val#))
                                 uri#
                                 s#)))
-                          (store-errors-and-redirect ~resource-id uri#)))))))
-       (defn ~view-sym [type# request#]
+                          (store-errors-and-redirect ~resource-id
+                                                     failure#)))))))
+       (defn ~view [type# request# default-type#]
          (let [params# (:params request#)
                form-data# (case type#
                                 :edit (let [id# (get-param params# :id)]
                                         (~load id#))
-                                {})]
+                                ~default-data)
+               form-type# (~type-fn-sym type#
+                                        request#
+                                        form-data#
+                                        default-type#)]
            (template ~style
                      ~uri
-                     {:title (~title type#)
-                      :buttons ~buttons}
-                     (form-layout-grid ~field-layout
+                     {:title (~get-title-sym form-type# type#)
+                      :buttons (~get-buttons-sym form-type#)}
+                     (form-layout-grid (~get-layout-sym form-type#)
                                        ~resource-id
-                                       ~fields-sym
+                                       (~get-fields form-type#)
                                        request#
                                        form-data#))))
-       (defn ~resource [layout#]
-         (form-routes ~uri
-                      (fn [request#]
-                        (layout# request# (~view-sym :add request#)))
-                      (fn [request#]
-                        (layout# request# (~view-sym :edit request#)))
-                      ~submit-sym)))))
+       ~(form-routes-function resource uri view submit resource-id))))
+
+(defmacro extend-form
+  "Extend a previously defined form. The form can be extended either
+   statically or dynamically."
+  [resource & {:keys [with] :as options}]
+  (let [fields (or (:fields options) [])
+        {:keys [resource-id properties-def get-fields atom marshal
+                get-validator view submit]} (form-symbol-map-memo resource)
+        with-id (keyword (name with)) 
+        fields-sym (symbol (str (name with) "-fields"))
+        ;; optional
+        when (if-let [w (:when options)]
+               `(fn [action# request# form-data#]
+                  (if (~w action# request# form-data#)
+                    ~with-id
+                    ~resource-id))
+               `(fn [& args#] :default))
+        validator (or (:validator options) `identity)
+        params- (gensym "params_")
+        marshal-chain (build-marshal-chain params- fields)
+        forms
+        `(do
+           (swap! ~atom conj ~when)
+           (def ~fields-sym
+                (field-list ~validator ~properties-def
+                            ~@fields))
+           (defmethod ~get-fields ~with-id [form-type#]
+                      (concat (~get-fields ~resource-id)
+                              ~fields-sym))
+           (defmethod ~marshal ~with-id [form-type# ~params-]
+                      (merge (~marshal ~resource-id ~params-)
+                             (-> ~@marshal-chain)))
+           (defmethod ~get-validator ~with-id [form-type#]
+                      (let [resource-validator# (~get-validator
+                                                 ~resource-id)]
+                        (build-validator
+                         resource-validator#
+                         ~validator))))]
+    (if-let [at (:at options)]
+      (concat forms
+              [(form-routes-function with at view submit with-id)])
+      forms)))
+
