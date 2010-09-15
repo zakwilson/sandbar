@@ -1,4 +1,4 @@
-(ns sandbar.example.complex-form-example
+(ns sandbar.example.forms.complex-form-example
   "Simple example of creating a form using some of what Sandbar offers."
   (:use [ring.adapter.jetty :only [run-jetty]]
         [ring.middleware.file :only [wrap-file]]

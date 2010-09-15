@@ -440,3 +440,71 @@
   (is (= (meta (clean-form-input
                 (with-meta {:id "" :name "" :age 10} {:a "a"})))
          {:a "a"})))
+
+(defn button-row [buttons]
+  [:tr 
+   [:td {:colspan 1}
+    [:div.buttons
+     (display-buttons "basic" buttons)]]])
+
+(deftest test-append-buttons-to-table
+  (let [button [[:save]]
+        row (button-row button)
+        t [:table [:tr [:td]]]
+        bt [:table [:tr [:td]] row]]
+    (is (= (append-buttons-to-table [:div t [:input]] button)
+           [:div bt [:input]]))
+    (is (= (append-buttons-to-table [:div [:input] t [:input]] button)
+           [:div [:input] bt [:input]]))
+    (is (= (append-buttons-to-table [:div [:input] t] button)
+           [:div [:input] bt]))
+    (is (= (append-buttons-to-table [:div [:input]] button)
+           [:div [:input]]))))
+
+;;
+;; Test form macros
+;;
+
+(deftest test-expand
+  (t "expand a form field list"
+     (let [expand #'sandbar.forms/expand]
+       (t "for hidden fields"
+          (is (= (expand 'v {} ['(hidden :t)])
+                 ['(hidden :t)])))
+       (t "for checkboxes"
+          (is (= (expand 'v {} ['(checkbox :t)])
+               ['(checkbox {} :t)]))
+          (is (= (expand 'v {} ['(checkbox :t {:class :x})])
+                 ['(checkbox {} :t {:class :x})])))
+       (t "for multi-checkboxes"
+          (is (= (expand 'v {} ['(multi-checkbox :t [] name)])
+               ['(multi-checkbox {} :t [] name)])))
+       (t "for textfields"
+          (is (= (expand 'v {} ['(textfield :t)])
+                 ['(textfield {} :t v)]))
+          (is (= (expand 'v {} ['(textfield :t {:class :x})])
+                 ['(textfield {} :t {:class :x} v)]))
+          (is (= (expand 'v {} ['(textfield "a" :t)])
+                 ['(textfield "a" :t v)]))
+          (is (= (expand 'v {} ['(textfield "a" :t {:class :x})])
+                 ['(textfield "a" :t {:class :x} v)])))
+       (t "for passwords"
+          (is (= (expand 'v {} ['(password :t)])
+               ['(password {} :t v)]))
+          (is (= (expand 'v {} ['(password :t {:class :x})])
+                 ['(password {} :t {:class :x} v)])))
+       (t "for textareas"
+          (is (= (expand 'v {} ['(textarea :t)])
+               ['(textarea {} :t v)]))
+          (is (= (expand 'v {} ['(textarea :t {:class :x})])
+                 ['(textarea {} :t {:class :x} v)])))
+       (t "for selects"
+          (is (= (expand 'v {} ['(select :t [] {:i :v})])
+               ['(select {} :t [] {:i :v} v)]))
+          (is (= (expand 'v {} ['(select :t [] {:i :v} {:class :x})])
+                 ['(select {} :t [] {:i :v} {:class :x} v)])))
+       (t "for multi-selects"
+          (is (= (expand 'v {} ['(multi-select :t [] {:i :v})])
+               ['(multi-select {} :t [] {:i :v} v)]))
+          (is (= (expand 'v {} ['(multi-select :t [] {:i :v} {:class :x})])
+                 ['(multi-select {} :t [] {:i :v} {:class :x} v)]))))))

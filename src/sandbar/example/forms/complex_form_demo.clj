@@ -1,5 +1,6 @@
-(ns sandbar.example.form-demo
-  "Simple example of creating a form with Sandbar."
+(ns sandbar.example.forms.complex-form-demo
+  "Create a complex form using sandbar.forms. This demo shows most of
+   the options that are available for defform."
   (:use [ring.adapter.jetty :only [run-jetty]]
         [ring.middleware.file :only [wrap-file]]
         [ring.util.response :only [redirect]]
@@ -16,7 +17,7 @@
                                    if-valid
                                    add-validation-error]])
   (:require [compojure.route :as route]
-            [sandbar.example.database :as db]))
+            [sandbar.example.forms.database :as db]))
 
 (def properties
      {:username "Username"
@@ -31,8 +32,7 @@
       :password-validation-error "Password must have at least 10 chars."
       :region "Region"
       :notes "Notes"
-      :languages "Languages"
-      :admin-notes "Administrator Notes"})
+      :languages "Languages"})
 
 (defn layout [content]
   (html
@@ -43,8 +43,7 @@
      (stylesheet "sandbar-forms.css")
      (icon "icon.png")]
     [:body
-     (if-let [m (get-flash-value :user-message)]
-       [:div {:class "message"} m])
+     (if-let [m (get-flash-value :user-message)] [:div {:class "message"} m])
      [:h2 "Sandbar Form Example"]
      content]]))
 
@@ -68,28 +67,12 @@
     (add-validation-error m :password properties)
     m))
 
-(defn username-strength [m]
-  (if (< (count (:username m)) 5)
-    (add-validation-error m "Username must have more than 5 characters.")
-    m))
-
-(defn email-strength [m]
-  (if (< (count (:email m)) 2)
-    (add-validation-error m "Real email addresses must have more than 2 char.")
-    m))
-
 (def validator
      (build-validator
       (non-empty-string :username :password :first-name :last-name :email
                         properties)
       :ensure
-      password-strength
-      username-strength
-      email-strength))
-
-(def admin-form-validator
-     (build-validator
-      (non-empty-string :admin-notes properties)))
+      password-strength))
 
 (forms/defform user-form "/user/edit"
   :fields [(forms/hidden :id)
@@ -119,30 +102,13 @@
   :style :over-under
   :title #(case % :add "Create User" "Edit User")
   :field-layout [1 1 2 1 1 1 2 1]
-  :defaults {:username "something"
+  :defaults {:email "unknown"
              :roles [:user]
              :account-enabled "Y"
-             :region 2
              :languages [{:id 1 :name "Clojure"}]})
-
-;; The commented code below works. Create some new examples that show
-;; how to use these in a real scenario.
-
-#_(forms/extend-form user-form :with admin-form
-    :when (fn [action request form-data]
-            (or (= action :edit)
-                (get-param (-> request :params) :admin-notes)))
-    :fields [(forms/textarea :admin-notes {:rows 5 :cols 70})]
-    :validator admin-form-validator)
-
-#_(forms/extend-form user-form :with admin-form
-    :at "/user-two/edit"
-    :fields [(forms/textarea :admin-notes {:rows 5 :cols 70})]
-    :validator admin-form-validator)
 
 (defroutes routes
   (user-form (fn [_ form] (layout form)))
-  #_(admin-form (fn [_ form] (layout form)))
   (GET "/" [] (home))
   (route/not-found "<h1>Not Found</h1>"))
 

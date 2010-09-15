@@ -24,6 +24,7 @@
      [:title (str "Idea Database - " (s/capitalize title))]
      (icon "icon.png")
      (stylesheet "sandbar.css")
+     (stylesheet "sandbar-forms.css")
      (stylesheet "ideadb.css")]
     [:body
      [:div {:id "page"}
@@ -48,7 +49,7 @@
   (base-layout title
                (if (any-role-granted? request :admin)
                  [:div {:id "idea-actions"}
-                  (link-to "/idea/new" "Submit and Idea") " | "
+                  (link-to "/idea/edit" "Submit and Idea") " | "
                   (link-to "/admin/list" "Edit Lists") " | "
                   (link-to "/idea/download" "Download")]
                  [:div {:id "idea-actions"}

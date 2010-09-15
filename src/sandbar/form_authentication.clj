@@ -43,7 +43,7 @@
 (defn login-page [adapter request]
   (template :default
             (:uri request)
-            {:buttons [[:submit "Login"]]}
+            {:buttons [[:submit "Login"] [:reset]]}
             (form-layout-grid [1 1]
                               :login
                               [(textfield adapter :username {:size 25}

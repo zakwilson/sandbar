@@ -81,6 +81,10 @@
 ;; reqpose to be json.
 
 (defroutes ideadb-routes
+  
+  (ideas/idea-form (fn [request form] (form-layout "Idea Form"
+                                                   request
+                                                   form)))
   (autorouter route-adapter)
   
   (GET "/admin/list*" request

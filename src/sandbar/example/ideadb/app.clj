@@ -18,13 +18,13 @@
                      [tables :only (wrap-table-js)])
         (sandbar.example.ideadb control
                                 [layouts :only (main-layout)]))
-    (:require (sandbar.example.ideadb [data :as data])))
+  (:require (sandbar.example.ideadb [data :as data])))
 
 (data/configure-database :development)
 
 (def security-config
      [#"/admin.*"                   [:admin :ssl] 
-      #"/idea/edit.*"               [:admin :ssl] 
+      #"/idea/edit.*"               [#{:admin :user} :ssl] 
       #"/idea/delete.*"             [:admin :ssl] 
       #"/idea/download.*"           :admin 
       #"/permission-denied.*"       :any

@@ -20,20 +20,16 @@
 (def db (atom nil))
 
 ;; TODO - Update the database to use more associations and be a better
-;; example of carte usage.
+;; example of Carte usage.
 
 (def idea-model
      (model/model
-      (app_user [:id :username :password :salt :first_name :last_name :email
-                 :account_enabled]
-                (many-to-many roles :role :=> :user_role :user_id :role_id))
-      (role [:id :name])
-      (idea [:id :name :description :customer_need :originator :date_entered
-             :archive :business_unit :category :status :idea_type])
-      (business_unit [:id :name])
-      (idea_category [:id :name])
-      (idea_status [:id :name])
-      (idea_type [:id :name])))
+      (app_user (many-to-many roles :role :=> :user_role :user_id :role_id))
+      (idea)
+      (business_unit)
+      (idea_category)
+      (idea_status)
+      (idea_type)))
 
 (defn get-connection-info [context]
   {:connection
@@ -45,14 +41,16 @@
 
 (defn configure-database [context]
   (if (not @db)
-    (swap! db (fn [a b] b) (merge idea-model
-                                  (get-connection-info context)))))
+    (swap! db (fn [a b] b) (carte/merge-with-attrs
+                             (get-connection-info context)
+                             idea-model))))
 
 (defn fetch [& body]
   (println "fetch:" body)
   (apply carte/fetch @db body))
 
 (defn fetch-one [& body]
+  (println "fetch-one:" body)
   (apply carte/fetch-one @db body))
 
 (defn fetch-id [table id]

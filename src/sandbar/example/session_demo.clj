@@ -9,7 +9,7 @@
 (ns sandbar.example.session-demo
   "Illustrating the difference between functional and statful session
    manipulation. Also showing that they can be used simultaniously
-   buy do not interfere with one another."
+   but do not interfere with one another."
   (:use (ring.adapter jetty)
         (compojure core)
         (hiccup core page-helpers)

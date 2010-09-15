@@ -9,8 +9,8 @@
 (ns sandbar.example.ideadb.users
   (:require [sandbar.example.ideadb.data :as data]
             [sandbar.dev [tables :as tables]])
-  (:use (sandbar core util)
-        (sandbar.dev forms user-manager)
+  (:use (sandbar core util forms)
+        (sandbar.dev user-manager)
         (sandbar.example.ideadb properties)))
 
 (defn user-data-functions [k]

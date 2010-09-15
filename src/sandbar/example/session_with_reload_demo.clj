@@ -7,7 +7,10 @@
 ;; You must not remove this notice, or any other, from this software.
 
 (ns sandbar.example.session-with-reload-demo
-  "Illustrating how to use wrap-reload together with sessions."
+  "Illustrating how to use wrap-reload together with sessions. This demo
+   relies on a feature that will be included in Ring after version 0.3.0.
+   If you would like do this before that change is made then you will need to
+   make the changes shown here http://bit.ly/cf1q0N to your own fork of Ring."
   (:use (ring.adapter jetty)
         (ring.middleware reload)
         (ring.middleware.session memory)

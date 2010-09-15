@@ -47,7 +47,8 @@
    (doctype :html4)
    [:html
     [:head
-     (stylesheet "sandbar.css")]
+     (stylesheet "sandbar.css")
+     (stylesheet "sandbar-forms.css")]
     [:body
      [:h2 "Auth Demo"]
      content

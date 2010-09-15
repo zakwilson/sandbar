@@ -184,15 +184,24 @@
             0
             cells)))
 
-(defn append-buttons-to-table [div buttons]
-  (let [table (second div)
+(defn append-buttons-to-table
+  "Append a row of buttons to the end of the table within the passed div. The
+   table can be in any location within the div but there can be only one."
+  [div buttons]
+  (let [[beginning end] (split-with #(not (and (coll? %)
+                                               (= :table (first %)))) div)
+        table (first end)
+        end (drop 1 end)
         colspan (get-colspan (rest table))
-        new-table (conj table
-                        [:tr 
-                         [:td {:colspan colspan}
-                          [:div {:class "buttons"}
-                           (display-buttons "basic" buttons)]]])]
-    (apply vector (first div) new-table (drop 2 div))))
+        new-table (when table
+                    (conj table
+                          [:tr 
+                           [:td {:colspan colspan}
+                            [:div.buttons
+                             (display-buttons "basic" buttons)]]]))]
+    (vec (if new-table
+           (concat beginning [new-table] end)
+           div))))
 
 (defmethod template :basic [_ action {:keys [buttons]} field-div]
            (let [buttons (or buttons [[:submit] [:reset]])]
@@ -338,8 +347,8 @@
    :field-name fname
    :html [:input {:type "hidden" :name (name fname) :value ""}]})
 
-(defn select-map [coll key-key value-key]
-  (apply merge (map #(sorted-map (key-key %) (value-key %)) coll)))
+(defn options [coll key-key value-key]
+  (map #(vector :option {:value  (key-key %)} (value-key %)) coll))
 
 (defn select
   "Create a select form element."
@@ -350,7 +359,7 @@
            v (val key-and-value)
            opts (first (filter map? optional))
            req (first (filter #(not (map? %)) optional))
-           s-map (select-map coll k v)
+           options (options coll k v)
            select-html [:select (merge {:name (name fname)} opts)]
            select-html (if prompt
                          (concat select-html
@@ -363,8 +372,7 @@
         :html (vec
                (concat
                 select-html
-                (map #(vector :option {:value (key %)} (val %))
-                     s-map)))
+                options))
         :value-fn k})))
 
 (defn multi-select [title fname coll kv & optional]
@@ -398,7 +406,6 @@
             (vector :input
                     (assoc
                         (last html) :value previous-value))))))
-
 
 (defmethod set-form-field-value :textfield [form-state input-field]
   (set-input-form-field-value form-state input-field))
@@ -590,18 +597,23 @@
   ([type props fields attrs required]
      (map #(concat % [required]) (expand-field type props fields attrs))))
 
-(defn- expand [v p fields]
+(defn- expand [required props fields]
   (vec (apply concat
               (map #(let [t (first %)
                           r (rest %)
+                          [props r] (let [first-arg (first r)]
+                                      (if (or (map? first-arg)
+                                              (string? first-arg))
+                                        [first-arg (rest r)]
+                                        [props r]))
                           [f a] (if (map? (last r))
                                   [(butlast r) (last r)]
                                   [r {}])]
                       (cond (= (name t) "hidden")
                             [(field-def t (last %))]
                             (contains? #{"checkbox" "multi-checkbox"} (name t))
-                            (expand-field t p f a)
-                            :else (expand-field t p f a v)))
+                            (expand-field t props f a)
+                            :else (expand-field t props f a required)))
                    fields))))
 
 (defmacro field-list [validator properties & fields]
@@ -667,7 +679,9 @@
    :marshal (gensym "marshal_")
    :get-validator (gensym "get_validator_")
    :view (gensym "view_")
-   :submit (gensym "submit_")})
+   :submit (gensym "submit_")
+   :get-title (gensym "get_title_")
+   :get-buttons (gensym "get_buttons_")})
 
 (def form-symbol-map-memo (memoize form-symbol-map))
 
@@ -676,17 +690,14 @@
   [resource uri & {:keys [fields on-cancel on-success load]
                    :as options}]
   (let [{:keys [resource-id properties-def get-fields atom marshal
-                get-validator view submit]}
+                get-validator view submit get-title get-buttons]}
         (form-symbol-map-memo resource)
-        fields-sym (gensym "fields_")
         type-fn-sym (gensym "type_")
         params- (gensym "params_")
         marshal-chain (build-marshal-chain params- fields)
         ;; multimethods
         dispatch-sym (gensym "dispatch_")
         get-layout-sym (gensym "get_layout_")
-        get-title-sym (gensym "get_title_")
-        get-buttons-sym (gensym "get_buttons_")
         ;; semi-optional
         on-cancel (or on-cancel uri)
         on-success (or on-success `(fn [m#] ~uri))
@@ -702,13 +713,15 @@
                   buttons
                   (vec (concat buttons [:labels properties])))
         field-layout (or (:field-layout options) [1])
-        default-data (or (:defaults options) {})]
+        default-data (or (:defaults options) {})
+        marshal-fn (if-let [user-marshal (:marshal options)]
+                     `(~user-marshal (fn [~params-]
+                                       (-> ~@marshal-chain))
+                                     ~params-)
+                     `(-> ~@marshal-chain))]
     `(do
        (def ~properties-def
             ~properties)
-       (def ~fields-sym
-            (field-list ~validator ~properties-def
-                        ~@fields))
        (def ~atom (atom '()))
        (defn ~type-fn-sym [action# request# form-data# default#]
          (or (first (filter (fn [x#] (not (= x# :default)))
@@ -720,26 +733,27 @@
        (defmulti ~marshal ~dispatch-sym)
        (defmulti ~get-layout-sym ~dispatch-sym)
        (defmulti ~get-validator ~dispatch-sym)
-       (defmulti ~get-title-sym ~dispatch-sym)
-       (defmulti ~get-buttons-sym ~dispatch-sym)
+       (defmulti ~get-title ~dispatch-sym)
+       (defmulti ~get-buttons ~dispatch-sym)
        (defmethod ~get-fields :default [form-type#]
-                  ~fields-sym)
+                  (field-list ~validator ~properties-def
+                              ~@fields))
        (defmethod ~marshal :default [form-type# ~params-]
-                  (-> ~@marshal-chain))
+                  ~marshal-fn)
        (defmethod ~get-layout-sym :default [form-type#]
                   ~field-layout)
        (defmethod ~get-validator :default [form-type#]
                   ~validator)
-       (defmethod ~get-title-sym :default [form-type# type#]
+       (defmethod ~get-title :default [form-type# type#]
                   (~title type#))
-       (defmethod ~get-buttons-sym :default [form-type#]
+       (defmethod ~get-buttons :default [form-type#]
                   ~buttons)
        (defn ~submit [request# default-type#]
          (let [params# (:params request#)
                uri# (:uri request#)
+               form-type# (~type-fn-sym :marshal request# {} default-type#)
                {cancel-val# :cancel and-new-val# :save-and-new}
-               (special-button-text ~buttons)
-               form-type# (~type-fn-sym :marshal request# {} default-type#)]
+               (special-button-text (~get-buttons form-type#))]
            (redirect
             (if (form-cancelled? params# cancel-val#)
               ~on-cancel
@@ -770,8 +784,8 @@
                                         default-type#)]
            (template ~style
                      ~uri
-                     {:title (~get-title-sym form-type# type#)
-                      :buttons (~get-buttons-sym form-type#)}
+                     {:title (~get-title form-type# type#)
+                      :buttons (~get-buttons form-type#)}
                      (form-layout-grid (~get-layout-sym form-type#)
                                        ~resource-id
                                        (~get-fields form-type#)
@@ -785,9 +799,9 @@
   [resource & {:keys [with] :as options}]
   (let [fields (or (:fields options) [])
         {:keys [resource-id properties-def get-fields atom marshal
-                get-validator view submit]} (form-symbol-map-memo resource)
+                get-validator view submit get-title get-buttons]}
+        (form-symbol-map-memo resource)
         with-id (keyword (name with)) 
-        fields-sym (symbol (str (name with) "-fields"))
         ;; optional
         when (if-let [w (:when options)]
                `(fn [action# request# form-data#]
@@ -801,12 +815,10 @@
         forms
         `(do
            (swap! ~atom conj ~when)
-           (def ~fields-sym
-                (field-list ~validator ~properties-def
-                            ~@fields))
            (defmethod ~get-fields ~with-id [form-type#]
                       (concat (~get-fields ~resource-id)
-                              ~fields-sym))
+                              (field-list ~validator ~properties-def
+                                          ~@fields)))
            (defmethod ~marshal ~with-id [form-type# ~params-]
                       (merge (~marshal ~resource-id ~params-)
                              (-> ~@marshal-chain)))
@@ -815,9 +827,20 @@
                                                  ~resource-id)]
                         (build-validator
                          resource-validator#
-                         ~validator))))]
-    (if-let [at (:at options)]
-      (concat forms
-              [(form-routes-function with at view submit with-id)])
-      forms)))
+                         ~validator))))
+        forms (if-let [at (:at options)]
+                (concat forms
+                        [(form-routes-function with at view submit with-id)])
+                forms)
+        forms (if-let [title (:title options)]
+                (concat forms
+                        [`(defmethod ~get-title ~with-id [form-type# type#]
+                                     (~title type#))])
+                forms)
+        forms (if-let [buttons (:buttons options)]
+                (concat forms
+                        [`(defmethod ~get-buttons ~with-id [form-type#]
+                                     ~buttons)])
+                forms)]
+    forms))
 
