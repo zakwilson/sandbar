@@ -667,31 +667,43 @@
                   (fn [request#]
                     (~submit request# ~default)))))
 
+(defn- ns-sym [s]
+  (symbol (str *ns*) (str s)))
+
+(defn- ns-gensym [s]
+  (ns-sym (gensym s)))
+
 (defn- form-symbol-map
   "Produce common symbols that are used by both defform and extend-form.
    This function memoized below to ensure that the the symbols which are
    produced are always the same for a given resource."
   [resource]
   {:resource-id (keyword (name resource))
-   :properties-def (gensym "properties_")
-   :get-fields (gensym "get_fields_")
-   :atom (gensym "types_")
-   :marshal (gensym "marshal_")
-   :get-validator (gensym "get_validator_")
-   :view (gensym "view_")
-   :submit (gensym "submit_")
-   :get-title (gensym "get_title_")
-   :get-buttons (gensym "get_buttons_")})
+   :properties-def (ns-gensym "properties_")
+   :get-fields (ns-gensym "get_fields_")
+   :atom (ns-gensym "types_")
+   :marshal (ns-gensym "marshal_")
+   :get-validator (ns-gensym "get_validator_")
+   :view (ns-gensym "view_")
+   :submit (ns-gensym "submit_")
+   :get-title (ns-gensym "get_title_")
+   :get-buttons (ns-gensym "get_buttons_")
+   :get-post (ns-gensym "get_post_")})
 
 (def form-symbol-map-memo (memoize form-symbol-map))
+
+(defn sym->var->sym [v]
+  (let [{:keys [ns name]} (meta (resolve v))]
+    (symbol (str ns) (str name))))
 
 (defmacro defform
   "Define a form and produce a function that will generate the form's routes."
   [resource uri & {:keys [fields on-cancel on-success load]
                    :as options}]
   (let [{:keys [resource-id properties-def get-fields atom marshal
-                get-validator view submit get-title get-buttons]}
-        (form-symbol-map-memo resource)
+                get-validator view submit get-title get-buttons
+                get-post]}
+        (form-symbol-map-memo (ns-sym resource))
         type-fn-sym (gensym "type_")
         params- (gensym "params_")
         marshal-chain (build-marshal-chain params- fields)
@@ -735,6 +747,7 @@
        (defmulti ~get-validator ~dispatch-sym)
        (defmulti ~get-title ~dispatch-sym)
        (defmulti ~get-buttons ~dispatch-sym)
+       (defmulti ~get-post ~dispatch-sym)
        (defmethod ~get-fields :default [form-type#]
                   (field-list ~validator ~properties-def
                               ~@fields))
@@ -748,6 +761,8 @@
                   (~title type#))
        (defmethod ~get-buttons :default [form-type#]
                   ~buttons)
+       (defmethod ~get-post :default [form-type#]
+                  ~uri)
        (defn ~submit [request# default-type#]
          (let [params# (:params request#)
                uri# (:uri request#)
@@ -783,7 +798,7 @@
                                         form-data#
                                         default-type#)]
            (template ~style
-                     ~uri
+                     (~get-post form-type#)
                      {:title (~get-title form-type# type#)
                       :buttons (~get-buttons form-type#)}
                      (form-layout-grid (~get-layout-sym form-type#)
@@ -797,10 +812,13 @@
   "Extend a previously defined form. The form can be extended either
    statically or dynamically."
   [resource & {:keys [with] :as options}]
+  (resolve resource)
   (let [fields (or (:fields options) [])
+        ns-resource (str)
         {:keys [resource-id properties-def get-fields atom marshal
-                get-validator view submit get-title get-buttons]}
-        (form-symbol-map-memo resource)
+                get-validator view submit get-title get-buttons
+                get-post]}
+        (form-symbol-map-memo (sym->var->sym resource))
         with-id (keyword (name with)) 
         ;; optional
         when (if-let [w (:when options)]
@@ -830,7 +848,9 @@
                          ~validator))))
         forms (if-let [at (:at options)]
                 (concat forms
-                        [(form-routes-function with at view submit with-id)])
+                        [(form-routes-function with at view submit with-id)
+                         `(defmethod ~get-post ~with-id [form-type#]
+                                     ~at)])
                 forms)
         forms (if-let [title (:title options)]
                 (concat forms

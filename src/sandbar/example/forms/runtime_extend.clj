@@ -1,6 +1,8 @@
-(ns sandbar.example.forms.complex-form-demo
-  "Create a complex form using sandbar.forms. This demo shows most of
-   the options that are available for defform."
+(ns sandbar.example.forms.runtime-extend
+  "Create a complex form using sandbar.forms. Use extend-form to extend a form
+   at runtime. Often you want to create a form that behaves differently
+   depending on runtime conditions. In this example we extend a form so that
+   when it is being edited, an additional field is displayed."
   (:use [ring.adapter.jetty :only [run-jetty]]
         [ring.middleware.file :only [wrap-file]]
         [ring.util.response :only [redirect]]
@@ -17,7 +19,8 @@
                                    if-valid
                                    add-validation-error]])
   (:require [compojure.route :as route]
-            [sandbar.example.forms.database :as db]))
+            [sandbar.example.forms.database :as db]
+            [sandbar.example.forms.views :as views]))
 
 (def properties
      {:username "Username"
@@ -32,35 +35,8 @@
       :password-validation-error "Password must have at least 10 chars."
       :region "Region"
       :notes "Notes"
-      :languages "Languages"})
-
-(defn layout [content]
-  (html
-   (doctype :html4)
-   [:html
-    [:head
-     (stylesheet "sandbar.css")
-     (stylesheet "sandbar-forms.css")
-     (icon "icon.png")]
-    [:body
-     (if-let [m (get-flash-value :user-message)] [:div {:class "message"} m])
-     [:h2 "Sandbar Form Example"]
-     content]]))
-
-(defn home []
-  (layout [:div
-           (link-to "/user/edit" "Add New User")
-           [:table
-            [:tr
-             [:th "Username"]
-             [:th "Last Name"]
-             [:th ""]]
-            (map #(let [{:keys [username last-name id]} %]
-                    [:tr
-                     [:td username]
-                     [:td last-name]
-                     [:td (link-to (str "/user/edit/" id) "Edit")]])
-                 (db/all-users))]]))
+      :languages "Languages"
+      :admin-notes "Administrator Notes"})
 
 (defn password-strength [m]
   (if (< (count (:password m)) 10)
@@ -101,15 +77,22 @@
   :properties properties
   :style :over-under
   :title #(case % :add "Create User" "Edit User")
-  :field-layout [1 1 2 1 1 1 2 1]
-  :defaults {:email "unknown"
-             :roles [:user]
-             :account-enabled "Y"
-             :languages [{:id 1 :name "Clojure"}]})
+  :field-layout [1 1 2 1 1 1 2 1])
+
+(def admin-form-validator
+     (build-validator
+      (non-empty-string :admin-notes properties)))
+
+(forms/extend-form user-form :with admin-form
+    :when (fn [action request form-data]
+            (or (= action :edit)
+                (get-param (-> request :params) :admin-notes)))
+    :fields [(forms/textarea :admin-notes {:rows 5 :cols 70})]
+    :validator admin-form-validator)
 
 (defroutes routes
-  (user-form (fn [_ form] (layout form)))
-  (GET "/" [] (home))
+  (user-form (fn [_ form] (views/layout form)))
+  (GET "/" [] (views/home))
   (route/not-found "<h1>Not Found</h1>"))
 
 (def application-routes (-> routes
