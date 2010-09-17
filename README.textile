@@ -46,8 +46,8 @@ Add it to your project
 <code>
 (def app
   (-> routes
-	  (with-security security-policy form-authentication)
-	  wrap-stateful-session))
+    (with-security security-policy form-authentication)
+    wrap-stateful-session))
 </code>
 </pre>
 
@@ -88,6 +88,8 @@ Create a simple form with one textfield and validate its input.
 </code>
 </pre>
 
+For more detailed documentation see the <a href="http://github.com/brentonashworth/sandbar/wiki/Forms">Forms</a> or <a href="http://github.com/brentonashworth/sandbar/wiki/Form-Validation">Form Validation</a> pages in the Sandbar Wiki.
+
 h2. Other Examples
 
 Within Sandbar are some "working examples":http://github.com/brentonashworth/sandbar/tree/master/src/sandbar/example which may be helpful. The "Sandbar Examples":http://github.com/brentonashworth/sandbar-examples project contains other examples of Sandbar usage. You may also want to take a look at the "Clojure Web":http://github.com/abedra/clojure-web project which uses Sandbar in the Authentication examples.
@@ -121,7 +123,7 @@ h2. License
 
 Copyright (C) 2010 Brenton Ashworth
 
-Thanks to Allen Rohner for his help on this project.
+Thanks to Allen Rohner for his help with this project.
 
 Distributed under the Eclipse Public License, the same as Clojure uses. See the file COPYING.
 
