@@ -12,12 +12,14 @@ h2. Sessions
 
 Replace <code>wrap-session</code> with <code>wrap-stateful-session</code> and you can do this:
 
-```clj
-  (defn increment-counter []
-    (let [counter (+ 1 (session-get :counter 0))]
-      (do (session-put! :counter counter)
-          (str "Counter is now " counter))))
-```
+<pre>
+<code>
+(defn increment-counter []
+  (let [counter (+ 1 (session-get :counter 0))]
+    (do (session-put! :counter counter)
+        (str "Counter is now " counter))))
+</code>
+</pre>
 
 Flash is supported as well with <code>set-flash-value!</code> and <code>get-flash-value</code>.
 
@@ -66,11 +68,6 @@ Create a simple form with one textfield and validate its input.
 
 <pre>
 <code>
-(defn validator [m]
-  (if (< (count (:username m)) 5)
-    (add-validation-error m :username "Username must have at least 5 chars.")
-    m))
-
 (defform user-form "/user/edit"
   :fields [(hidden :id)
            (textfield "Username" :username)]
@@ -81,7 +78,10 @@ Create a simple form with one textfield and validate its input.
      (db/store-user %)
      (set-flash-value! :user-message "User has been saved.")
      "/")
-  :validator validator)
+  :validator
+  #(if (< (count (:username %)) 5)
+     (add-validation-error % :username "Username must have at least 5 chars.")
+     %))
 
 (defroutes routes
   (user-form (fn [request form] (layout form))))
@@ -90,7 +90,7 @@ Create a simple form with one textfield and validate its input.
 
 h2. Other Examples
 
-Within sandbar are some "working examples":http://github.com/brentonashworth/sandbar/tree/master/src/sandbar/example which may be helpful. The "Sandbar Examples":http://github.com/brentonashworth/sandbar-examples project contains other examples of Sandbar usage. You may also want to take a look at the "Clojure Web":http://github.com/abedra/clojure-web project which uses Sandbar in the Authentication examples.
+Within Sandbar are some "working examples":http://github.com/brentonashworth/sandbar/tree/master/src/sandbar/example which may be helpful. The "Sandbar Examples":http://github.com/brentonashworth/sandbar-examples project contains other examples of Sandbar usage. You may also want to take a look at the "Clojure Web":http://github.com/abedra/clojure-web project which uses Sandbar in the Authentication examples.
 
 h2. Using Sandbar in your project
 

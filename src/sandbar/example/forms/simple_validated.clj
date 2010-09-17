@@ -13,11 +13,6 @@
             [sandbar.example.forms.database :as db]
             [sandbar.example.forms.views :as views]))
 
-(defn validator [m]
-  (if (< (count (:username m)) 5)
-    (add-validation-error m :username "Username must have at least 5 chars.")
-    m))
-
 (forms/defform user-form "/user/edit"
   :fields [(forms/hidden :id)
            (forms/textfield "Username" :username)]
@@ -28,7 +23,10 @@
      (db/store-user %)
      (set-flash-value! :user-message "User has been saved.")
      "/")
-  :validator validator)
+  :validator
+  #(if (< (count (:username %)) 5)
+    (add-validation-error % :username "Username must have at least 5 chars.")
+    %))
 
 (defroutes routes
   (user-form (fn [_ form] (views/layout form)))
