@@ -5,9 +5,9 @@
         [ring.middleware.file :only [wrap-file]]
         [compojure.core :only [defroutes GET]]
         [sandbar.stateful-session :only [wrap-stateful-session
-                                         set-flash-value!]]
-        [sandbar.forms :as forms])
+                                         set-flash-value!]])
   (:require [compojure.route :as route]
+            [sandbar.forms :as forms]
             [sandbar.example.forms.database :as db]
             [sandbar.example.forms.views :as views]))
 

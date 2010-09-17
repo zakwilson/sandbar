@@ -13,12 +13,12 @@
                                          set-flash-value!
                                          get-flash-value]]
         [sandbar.core :only [icon stylesheet get-param]]
-        [sandbar.forms :as forms]
         [sandbar.validation :only [build-validator
                                    non-empty-string
                                    if-valid
                                    add-validation-error]])
   (:require [compojure.route :as route]
+            [sandbar.forms :as forms]
             [sandbar.example.forms.database :as db]
             [sandbar.example.forms.views :as views]))
 

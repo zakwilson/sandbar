@@ -1,102 +1,59 @@
 h1. Sandbar
 
-Sandbar is a set of small libraries for web applications which is designed to be used with "Compojure":http://github.com/weavejester/compojure and/or "Ring":http://github.com/mmcgrana/ring. It is a work in progress. The following features will be implemented in order.
+Sandbar is a web application library which is designed to be used with "Compojure":http://github.com/weavejester/compojure and/or "Ring":http://github.com/mmcgrana/ring. It builds on these projects providing the following additional features:
 
-* Stateful session management
-* Authorization and authentication
-* Form layout, validation and error reporting
-* Basic (form based) authentication
-* Tables which may be filtered, sorted and paged
-* User management
+* Session and flash as a global map
+* Authorization and authentication, including built-in support for form-based authentication
+* Forms and form validation
 
-The name "sandbar" is a surfing reference. A sandbar creates waves which may be surfed. Sandbar creates web sites which may be surfed. Sandbars are always in a state of change. So is this project.
+More documentation is located in the <a href="http://github.com/brentonashworth/sandbar/wiki">Sandbar Wiki</a>.
 
-The project contains the library code as well as a reference application which uses it. There are also small demo applications which show how to use each feature.
+h2. Sessions
 
-h2. Features
+Show the most simple example of working with sessions in sandbar.
 
-The current version of Sandbar contains two completed features: 
+h2. Authorization and Authentication
 
-* Stateful sessions
-* Authorization and authentication
+Show the most simple example of working with auth(n|z) in sandbar.
 
-Documentation for completed features is located in the <a href="http://wiki.github.com/brentonashworth/sandbar/">Sandbar Wiki</a>.
+h2. Forms
 
-By completed, I mean that they have taken the final form that they will have in version 1.0.0. There is still much work to be done to test them and to make them more robust.
+Show the most simple example of working with forms in sandbar.
+
+h2. Other Examples
+
+Point to the example code in sandbar as well as the sandbar-examples project and the the clojure web project.
 
 h2. Using Sandbar in your project
 
-If you would like to use Sandbar in your project then you may use the currently available 0.2.4 release that is on Clojars.
+h3. Leiningen
 
-To include all Sandbar libraries in your Leiningen project, add the following to your <code>:dependencies</code>
+Add <code>[sandbar "0.3.0-SNAPSHOT"]</code> to your :dependencies in project.clj.
 
-<pre>
-<code>
-[sandbar "0.2.4"]
-</code>
-</pre>
+h3. Maven
 
-If you would like to use only the individual libraries then you may use:
+Add the following dependency:
 
-<pre>
-<code>
-[sandbar/sandbar-core "0.3.1"]
-[sandbar/sandbar-session "0.2.4"]
-[sandbar/sandbar-auth "0.2.3"]
-[sandbar/sandbar-dev "0.0.1-SNAPSHOT"]
-</code>
-</pre>
+<pre><code><dependency>
+  <groupId>sandbar</groupId>
+  <artifactId>sandbar</artifactId>
+  <version>0.3.0-SNAPSHOT</version>
+</dependency></code></pre>
 
-Please note that the code in sandbar-dev is very pre-alpha. It will change often and may not work.
+which comes from Clojars...
 
-h2. Running the reference application
+<pre><code><repository>
+  <id>clojars.org</id>
+  <url>http://clojars.org/repo</url>
+</repository></code></pre>
 
-The reference application demonstrates how to use the sandbar libraries.
-
-To run the reference application, follow these steps:
-
-* "Install Leiningen":http://github.com/technomancy/leiningen
-* Configure MySQL
-
-<pre>
-<code>
-$ mysql -u root -p 
-$ CREATE DATABASE idea_db;
-$ GRANT ALL PRIVILEGES ON idea_db.* TO idea_user@localhost IDENTIFIED BY '123456789';
-$ exit
-</code>
-</pre>
-
-* Execute the following commands:
-
-<pre>
-<code> 
-$ git clone git://github.com/brentonashworth/sandbar.git
-$ cd sandbar
-$ git branch --track stable origin/stable
-$ git checkout stable
-$ cd examples
-$ lein deps
-$ lein repl
-$ (load-file "src/testdrive.clj")
-</code>
-</pre>
-
-You may now open a browser and go to http://localhost:8080/.
-
-There are two user accounts:
-
-username: admin-user
-password: admin
-
-username: normal-user
-password: password
-
-Log in with one of these accounts and take it for a spin. The next step would be to take a look at the code and tinker with it in your development environment of choice. Start with <code>example.ideadb.app</code>.
+Please note that any code with a namespace prefix of <code>sandbar.dev</code> is very pre-alpha. It will change often and may not work.
 
 h2. License
 
 Copyright (C) 2010 Brenton Ashworth
+
+Thanks to Allen Rohner for his help with on this project.
 
 Distributed under the Eclipse Public License, the same as Clojure uses. See the file COPYING.
 

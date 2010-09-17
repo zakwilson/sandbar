@@ -7,9 +7,9 @@
         [compojure.core :only [defroutes GET]]
         [sandbar.stateful-session :only [wrap-stateful-session
                                          set-flash-value!]]
-        [sandbar.forms :as forms]
         [sandbar.validation :only [add-validation-error]])
   (:require [compojure.route :as route]
+            [sandbar.forms :as forms]
             [sandbar.example.forms.database :as db]
             [sandbar.example.forms.views :as views]))
 

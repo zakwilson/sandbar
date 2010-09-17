@@ -7,11 +7,11 @@
         [compojure.core :only [defroutes GET]]
         [sandbar.stateful-session :only [wrap-stateful-session
                                          set-flash-value!]]
-        [sandbar.forms :as forms]
         [sandbar.validation :only [build-validator
                                    non-empty-string
                                    add-validation-error]])
   (:require [compojure.route :as route]
+            [sandbar.forms :as forms]
             [sandbar.example.forms.database :as db]
             [sandbar.example.forms.views :as views]))
 
@@ -55,8 +55,7 @@
                          {:id :value :prompt {"" "Select a Region"}})
            (forms/multi-select :languages
                                (db/all-langs)
-                               {:id :name}
-                               {:class "something"})
+                               {:id :name})
            (forms/textarea :notes {:rows 5 :cols 70})]
   :buttons [[:save] [:cancel]]
   :load #(db/find-user %)
