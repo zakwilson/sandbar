@@ -10,25 +10,93 @@ More documentation is located in the <a href="http://github.com/brentonashworth/
 
 h2. Sessions
 
-Show the most simple example of working with sessions in sandbar.
+Replace <code>wrap-session</code> with <code>wrap-stateful-session</code> and you can do this:
+
+```clj
+  (defn increment-counter []
+    (let [counter (+ 1 (session-get :counter 0))]
+      (do (session-put! :counter counter)
+          (str "Counter is now " counter))))
+```
+
+Flash is supported as well with <code>set-flash-value!</code> and <code>get-flash-value</code>.
+
+For more detailed documentation see the <a href="http://github.com/brentonashworth/sandbar/wiki/Stateful-Sessions">Stateful Sessions</a> page in the Sandbar Wiki.
 
 h2. Authorization and Authentication
 
-Show the most simple example of working with auth(n|z) in sandbar.
+Create a security policy
+
+<pre>
+<code>
+(def security-policy
+     [#"/admin.*"                   :admin 
+      #"/permission-denied.*"       :any
+      #"/login.*"                   :any 
+      #".*\.(css|js|png|jpg|gif)$"  :any 
+      #".*"                         #{:admin :user}])
+</code>
+</pre>
+
+Add it to your project
+
+<pre>
+<code>
+(def app
+  (-> routes
+	  (with-security security-policy form-authentication)
+	  wrap-stateful-session))
+</code>
+</pre>
+
+Use it
+
+<pre>
+<code>
+(ensure-any-role #{:user :admin}
+  (disintegrate "something"))
+</code>
+</pre>
+
+For more detailed documentation see the <a href="http://github.com/brentonashworth/sandbar/wiki/Authentication-and-Authorization">Authentication and Authorization</a> page in the Sandbar Wiki.
 
 h2. Forms
 
-Show the most simple example of working with forms in sandbar.
+Create a simple form with one textfield and validate its input.
+
+<pre>
+<code>
+(defn validator [m]
+  (if (< (count (:username m)) 5)
+    (add-validation-error m :username "Username must have at least 5 chars.")
+    m))
+
+(defform user-form "/user/edit"
+  :fields [(hidden :id)
+           (textfield "Username" :username)]
+  :load #(db/find-user %)
+  :on-cancel "/"
+  :on-success
+  #(do
+     (db/store-user %)
+     (set-flash-value! :user-message "User has been saved.")
+     "/")
+  :validator validator)
+
+(defroutes routes
+  (user-form (fn [request form] (layout form))))
+</code>
+</pre>
 
 h2. Other Examples
 
-Point to the example code in sandbar as well as the sandbar-examples project and the the clojure web project.
+Within sandbar are some "working examples":http://github.com/brentonashworth/sandbar/tree/master/src/sandbar/example which may be helpful. The "Sandbar Examples":http://github.com/brentonashworth/sandbar-examples project contains other examples of Sandbar usage. You may also want to take a look at the "Clojure Web":http://github.com/abedra/clojure-web project which uses Sandbar in the Authentication examples.
 
 h2. Using Sandbar in your project
 
 h3. Leiningen
 
-Add <code>[sandbar "0.3.0-SNAPSHOT"]</code> to your :dependencies in project.clj.
+Add <code>[sandbar/sandbar "0.3.0-SNAPSHOT"]</code> to your :dependencies in project.clj.
 
 h3. Maven
 
@@ -53,7 +121,7 @@ h2. License
 
 Copyright (C) 2010 Brenton Ashworth
 
-Thanks to Allen Rohner for his help with on this project.
+Thanks to Allen Rohner for his help on this project.
 
 Distributed under the Eclipse Public License, the same as Clojure uses. See the file COPYING.
 
