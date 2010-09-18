@@ -25,7 +25,31 @@ Flash is supported as well with <code>set-flash-value!</code> and <code>get-flas
 
 For more detailed documentation see the <a href="http://github.com/brentonashworth/sandbar/wiki/Stateful-Sessions">Stateful Sessions</a> page in the Sandbar Wiki.
 
-h2. Authorization and Authentication
+h2. Authentication and Authorization
+
+To add form-based authentication to your application, implement the <code>FormAuthAdapter</code>.
+
+<pre>
+<code>
+(defrecord DemoAdapter []
+  FormAuthAdapter
+  (load-user [this username password]
+    (... your implementation here...))
+  (validate-password [this]
+    (fn [m] (... your implementation here...))))
+</code>
+</pre>
+
+Create form authentication routes
+
+<pre>
+<code>
+(defroutes routes
+  (form-authentication-routes (fn [request content] (layout c))
+                              (DemoAdapter.))
+  (ANY "*" [] (layout (home-view))))
+</code>
+</pre>
 
 Create a security policy
 
@@ -40,14 +64,14 @@ Create a security policy
 </code>
 </pre>
 
-Add it to your project
+Apply this policy to your project
 
 <pre>
 <code>
 (def app
-  (-> routes
-    (with-security security-policy form-authentication)
-    wrap-stateful-session))
+     (-> routes
+       (with-security security-policy form-authentication)
+       wrap-stateful-session))
 </code>
 </pre>
 
@@ -62,7 +86,7 @@ Use it
 
 For more detailed documentation see the <a href="http://github.com/brentonashworth/sandbar/wiki/Authentication-and-Authorization">Authentication and Authorization</a> page in the Sandbar Wiki.
 
-h2. Forms
+h2. Forms and Form Validation
 
 Create a simple form with one textfield and validate its input.
 
