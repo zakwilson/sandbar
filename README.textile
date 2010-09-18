@@ -33,10 +33,13 @@ To add form-based authentication to your application, implement the <code>FormAu
 <code>
 (defrecord DemoAdapter []
   FormAuthAdapter
-  (load-user [this username password]
-    (... your implementation here...))
-  (validate-password [this]
-    (fn [m] (... your implementation here...))))
+    (load-user [this username password]
+      (merge (database/find-user username) {:login-password password})
+    (validate-password [this]
+      (fn [m]
+        (if (= (:password m) (:login-password m))
+          m
+          (add-validation-error m "Incorrect username or password!")))))
 </code>
 </pre>
 
