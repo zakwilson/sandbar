@@ -841,11 +841,10 @@
                       (merge (~marshal ~resource-id ~params-)
                              (-> ~@marshal-chain)))
            (defmethod ~get-validator ~with-id [form-type#]
-                      (let [resource-validator# (~get-validator
-                                                 ~resource-id)]
-                        (build-validator
-                         resource-validator#
-                         ~validator))))
+                      (let [v# ~validator]
+                        (fn [m#]
+                         (-> ((~get-validator ~resource-id) m#)
+                             v#)))))
         forms (if-let [at (:at options)]
                 (concat forms
                         [(form-routes-function with at view submit with-id)
