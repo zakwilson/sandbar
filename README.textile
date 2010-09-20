@@ -98,7 +98,7 @@ Add the <code>with-security</code> wrapper, passing it the security policy and t
 <code>
 (def app
      (-> routes
-       (with-security security-policy form-authentication)
+       (with-security security-policy form-auth)
        wrap-stateful-session))
 </code>
 </pre>
