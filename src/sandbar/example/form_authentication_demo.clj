@@ -77,7 +77,7 @@
   (GET "/admin*" [] (layout (admin-view)))
   (GET "/permission-denied*" [] (layout (permission-denied-view)))
   (form-authentication-routes (fn [r c] (layout c))
-                     (form-authentication-adapter))
+                              (form-authentication-adapter))
   (ANY "*" [] (layout (home-view))))
 
 ;;

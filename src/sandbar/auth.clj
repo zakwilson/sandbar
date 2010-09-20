@@ -242,3 +242,13 @@
                                                user-status)
                                          (handler request))))))))
                :else (redirect-to-permission-denied uri-prefix))))))
+
+(defmulti create-authenticator (fn [& args] (first args)))
+
+(defmethod create-authenticator :default [type n options]
+  `(defn ~n [arg#]
+     {:username :anonymous :roles #{}}))
+
+(defmacro defauth [n & {:keys [type] :as options}]
+  (let [auth (create-authenticator type n options)]
+    `~auth))

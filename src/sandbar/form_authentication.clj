@@ -10,7 +10,8 @@
   "Provide support for form based authentication."
   (:use (compojure core)
         (ring.util [response :only (redirect)])
-        (sandbar [auth :only (logout!)]
+        (sandbar [auth :only (logout!
+                              create-authenticator)]
                  [stateful-session :only (session-get
                                           session-put!
                                           set-flash-value!
@@ -20,11 +21,11 @@
                                     non-empty-string
                                     if-valid)]
                  [forms :only (form-layout-grid
-                                   textfield
-                                   password
-                                   template
-                                   get-params
-                                   store-errors-and-redirect)])))
+                               textfield
+                               password
+                               template
+                               get-params
+                               store-errors-and-redirect)])))
 
 (defprotocol FormAuthAdapter
   "Protocol for processing form authenticaion credentials."
@@ -90,3 +91,25 @@
             (authenticate! adapter params))
       (GET (str path-prefix "/logout*") []
            (logout! adapter)))))
+
+(defmethod create-authenticator :form [type n options]
+  (let [record (gensym "form_adapter_")
+        ctor (gensym "form_adapter_ctor_")
+        load (or (:load options) `(fn [u# p#] nil))
+        validate (or (:validator options) `identity)
+        properties (or (:properties options) {})]
+    `(do
+       (defrecord ~record []
+         sandbar.form-authentication/FormAuthAdapter
+         (sandbar.form-authentication/load-user [this# username# password#]
+                                                (~load username# password#))
+         (sandbar.form-authentication/validate-password [this#]
+                                                        ~validate))
+       (defn ~ctor []
+         (merge (new ~record) ~properties))
+       (defn ~n [arg#]
+         (if (map? arg#)
+           (sandbar.form-authentication/form-authentication arg#)
+           (sandbar.form-authentication/form-authentication-routes
+            arg#
+            (~ctor)))))))

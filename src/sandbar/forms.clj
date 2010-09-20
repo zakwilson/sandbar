@@ -812,7 +812,6 @@
   "Extend a previously defined form. The form can be extended either
    statically or dynamically."
   [resource & {:keys [with] :as options}]
-  (resolve resource)
   (let [fields (or (:fields options) [])
         ns-resource (str)
         {:keys [resource-id properties-def get-fields atom marshal
