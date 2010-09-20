@@ -25,70 +25,6 @@ Flash is supported as well with <code>set-flash-value!</code> and <code>get-flas
 
 For more detailed documentation see the <a href="http://github.com/brentonashworth/sandbar/wiki/Stateful-Sessions">Stateful Sessions</a> page in the Sandbar Wiki.
 
-h2. Authentication and Authorization
-
-To add form-based authentication to your application, implement the <code>FormAuthAdapter</code>.
-
-<pre>
-<code>
-(defrecord DemoAdapter []
-  FormAuthAdapter
-    (load-user [this username password]
-      (merge (database/find-user username) {:login-password password})
-    (validate-password [this]
-      (fn [m]
-        (if (= (:password m) (:login-password m))
-          m
-          (add-validation-error m "Incorrect username or password!")))))
-</code>
-</pre>
-
-Create form authentication routes
-
-<pre>
-<code>
-(defroutes routes
-  (form-authentication-routes (fn [request content] (layout content))
-                              (DemoAdapter.))
-  (ANY "*" [] (layout (home-view))))
-</code>
-</pre>
-
-Create a security policy
-
-<pre>
-<code>
-(def security-policy
-     [#"/admin.*"                   :admin 
-      #"/permission-denied.*"       :any
-      #"/login.*"                   :any 
-      #".*\.(css|js|png|jpg|gif)$"  :any 
-      #".*"                         #{:admin :user}])
-</code>
-</pre>
-
-Apply this policy to your project
-
-<pre>
-<code>
-(def app
-     (-> routes
-       (with-security security-policy form-authentication)
-       wrap-stateful-session))
-</code>
-</pre>
-
-Use it
-
-<pre>
-<code>
-(ensure-any-role #{:user :admin}
-  (disintegrate "something"))
-</code>
-</pre>
-
-For more detailed documentation see the <a href="http://github.com/brentonashworth/sandbar/wiki/Authentication-and-Authorization">Authentication and Authorization</a> page in the Sandbar Wiki.
-
 h2. Forms and Form Validation
 
 Create a simple form with one textfield and validate its input.
@@ -116,6 +52,67 @@ Create a simple form with one textfield and validate its input.
 </pre>
 
 For more detailed documentation see the <a href="http://github.com/brentonashworth/sandbar/wiki/Forms">Forms</a> or <a href="http://github.com/brentonashworth/sandbar/wiki/Form-Validation">Form Validation</a> pages in the Sandbar Wiki.
+
+h2. Authentication and Authorization
+
+Create a security policy...
+
+<pre>
+<code>
+(def security-policy
+     [#"/admin.*"                   :admin 
+      #"/permission-denied.*"       :any
+      #"/login.*"                   :any 
+      #".*\.(css|js|png|jpg|gif)$"  :any 
+      #".*"                         #{:admin :user}])
+</code>
+</pre>
+
+...and an authenticator.
+
+<pre>
+<code>
+(defauth form-auth
+  :type :form
+  :load (fn [username password]
+          (merge (database/find-user username) {:login-password password}))
+  :validator #(if (= (:password %) (:login-password %))
+                %
+                (add-validation-error % "Incorrect username or password!"))))
+</code>
+</pre>
+
+Add the authenticator to your routes.
+
+<pre>
+<code>
+(defroutes routes
+  (form-auth (fn [request content] (layout content)))
+  (ANY "*" [] (layout (home-view))))
+</code>
+</pre>
+
+Add the <code>with-security</code> wrapper, passing it the security policy and the authenticator.
+
+<pre>
+<code>
+(def app
+     (-> routes
+       (with-security security-policy form-authentication)
+       wrap-stateful-session))
+</code>
+</pre>
+
+Use it!
+
+<pre>
+<code>
+(ensure-any-role #{:user :admin}
+  (disintegrate "something"))
+</code>
+</pre>
+
+For more detailed documentation see the <a href="http://github.com/brentonashworth/sandbar/wiki/Authentication-and-Authorization">Authentication and Authorization</a> page in the Sandbar Wiki.
 
 h2. Other Examples
 
