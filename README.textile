@@ -48,7 +48,7 @@ Create form authentication routes
 <pre>
 <code>
 (defroutes routes
-  (form-authentication-routes (fn [request content] (layout c))
+  (form-authentication-routes (fn [request content] (layout content))
                               (DemoAdapter.))
   (ANY "*" [] (layout (home-view))))
 </code>
