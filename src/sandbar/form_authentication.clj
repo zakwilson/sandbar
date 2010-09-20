@@ -76,7 +76,10 @@
                   success)
                #(do (set-flash-value!
                      :login
-                     (merge {:form-data (dissoc %1 :username :password)} %2))
+                     (merge {:form-data (dissoc (into {} %1)
+                                                :username
+                                                :password)}
+                            %2))
                     failure)))))
 
 (defn form-authentication-routes
