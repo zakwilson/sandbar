@@ -78,7 +78,7 @@ Create a security policy...
           (merge (database/find-user username) {:login-password password}))
   :validator #(if (= (:password %) (:login-password %))
                 %
-                (add-validation-error % "Incorrect username or password!"))))
+                (add-validation-error % "Incorrect username or password!")))
 </code>
 </pre>
 
