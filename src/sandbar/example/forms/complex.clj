@@ -9,6 +9,8 @@
                                          set-flash-value!]]
         [sandbar.validation :only [build-validator
                                    non-empty-string
+                                   integer-number
+                                   one-or-more-maps
                                    add-validation-error]])
   (:require [compojure.route :as route]
             [sandbar.forms :as forms]
@@ -36,10 +38,17 @@
     (add-validation-error m :password properties)
     m))
 
+(def language-validator
+     (build-validator
+      (integer-number :id)
+      (non-empty-string :name)))
+
 (def validator
      (build-validator
       (non-empty-string :username :password :first-name :last-name :email
                         properties)
+      (integer-number :region properties)
+      (one-or-more-maps :languages language-validator properties)
       :ensure
       password-strength))
 
@@ -62,6 +71,7 @@
   :on-cancel "/"
   :on-success
   #(do
+     (println %)
      (db/store %)
      (set-flash-value! :user-message "User has been saved.")
      "/")

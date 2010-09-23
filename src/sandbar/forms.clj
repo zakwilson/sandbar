@@ -13,7 +13,10 @@
         [sandbar.stateful-session :only [set-flash-value!
                                          get-flash-value]]
         [sandbar.core :only [cpath get-param property-lookup]]
-        [sandbar.validation :only [if-valid required-fields build-validator]])
+        [sandbar.validation :only [if-valid
+                                   required-fields
+                                   build-validator
+                                   validation-errors]])
   (:require [compojure.route :as route]
             [clojure.string :as string]
             [clojure.contrib.json :as json]))
@@ -762,7 +765,7 @@
                              default-type#)
            form-data# (~marshal form-type# params#)
            validator# (~get-validator form-type#)
-           errors# (:_validation-errors (validator# form-data#))]
+           errors# (validation-errors (validator# form-data#))]
        (json/json-str (if errors#
                         {:status :fail :errors errors#}
                         {:status :pass})))))

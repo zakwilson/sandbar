@@ -142,5 +142,38 @@
                          (fn [k msg]
                            (str (property-lookup msg k) " cannot be nil!"))))
 
+(defn integer-number [m & args]
+  (multi-value-validator m args
+                         (fn [k]
+                           (let [value (get m k)]
+                             (integer? value)))
+                         (fn [k msg]
+                           (str (property-lookup msg k)
+                                " must be an integer number!"))))
+
+(defn zero-or-more-maps [m k & options]
+  (let [vfn (first (filter fn? options))
+        msg (first (filter #(not (fn? %)) options))
+        element-validator (or (fn [m] (= (vfn m) m))
+                              map?)
+        values (get m k)]
+    (if (and (coll? values)
+             (every? true? (map element-validator values)))
+      m
+      (add-validation-error m k (str (property-lookup msg k)
+                                     " must be empty or contain maps!")))))
+
+(defn one-or-more-maps [m k & options]
+  (let [result (apply zero-or-more-maps m k options)
+        msg (first (filter #(not (fn? %)) options))]
+    (if (and (= result m)
+             (> (count (get m k)) 0))
+      m
+      (add-validation-error m k (str (property-lookup msg k)
+                                     " must be a list of maps!")))))
+
+(defn validation-errors [m]
+  (:_validation-errors m))
+
 (defn required-fields [validator]
-  (keys (:_validation-errors (validator {}))))
+  (keys (validation-errors (validator {}))))
