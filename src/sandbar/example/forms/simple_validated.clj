@@ -16,11 +16,11 @@
 (forms/defform user-form "/user/edit"
   :fields [(forms/hidden :id)
            (forms/textfield "Username" :username)]
-  :load #(db/find-user %)
+  :load #(db/fetch %)
   :on-cancel "/"
   :on-success
   #(do
-     (db/store-user %)
+     (db/store %)
      (set-flash-value! :user-message "User has been saved.")
      "/")
   :validator

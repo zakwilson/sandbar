@@ -80,7 +80,7 @@
              failure (get (-> request :headers) "referer")]
          (if-valid user-validator form-data
                    #(do
-                      (db/store-user %)
+                      (db/store %)
                       (set-flash-value! :user-message "User has been saved.")
                       success)
                    (forms/store-errors-and-redirect :user failure)))))))
@@ -88,7 +88,7 @@
 (defn form-view [type {:keys [params] :as request}]
   (let [form-data (case type
                         :edit (let [id (get-param params :id)]
-                                (db/find-user id))
+                                (db/fetch id))
                         {})]
     (views/layout
      (forms/template :over-under

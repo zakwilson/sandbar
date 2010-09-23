@@ -31,7 +31,7 @@
              [:tr
               [:td username]
               [:td (link-to (str "/altuser/edit/" id) "Edit")]])
-          (db/all-users))]]))
+          (db/all-things))]]))
 
 (def admin-form-validator
      (build-validator

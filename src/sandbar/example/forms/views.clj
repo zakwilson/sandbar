@@ -31,4 +31,4 @@
              [:tr
               [:td username]
               [:td (link-to (str "/user/edit/" id) "Edit")]])
-          (db/all-users))]]))
+          (db/all-things))]]))

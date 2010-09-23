@@ -133,7 +133,7 @@
              form-type (user-form-type :validate request form-data)]
          (if-valid (get-user-form-validator form-type) form-data
                    #(do
-                      (db/store-user %)
+                      (db/store %)
                       (set-flash-value! :user-message "User has been saved.")
                       success)
                    (forms/store-errors-and-redirect :user failure)))))))
@@ -141,7 +141,7 @@
 (defn form-view [type {:keys [params] :as request}]
   (let [form-data (case type
                         :edit (let [id (get-param params :id)]
-                                (db/find-user id))
+                                (db/fetch id))
                         {})
         form-type (user-form-type type request form-data)]
     (views/layout
@@ -185,7 +185,7 @@
 
 (defmethod marshal-user-form :admin-form [form-type params]
            (merge (marshal-user-form :user-form params)
-                  (get-params [:admin-notes] params)))
+                  (forms/get-params [:admin-notes] params)))
 
 (defmethod get-user-form-validator :admin-form [form-type]
            admin-form-validator)
