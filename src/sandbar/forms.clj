@@ -10,13 +10,13 @@
   "Forms and form layouts."
   (:use [ring.util.response :only [redirect]]
         [compojure.core :only [routes GET POST]]
-        [hiccup.form-helpers :only [form-to]]
         [sandbar.stateful-session :only [set-flash-value!
                                          get-flash-value]]
         [sandbar.core :only [cpath get-param property-lookup]]
         [sandbar.validation :only [if-valid required-fields build-validator]])
   (:require [compojure.route :as route]
-            [clojure.string :as string]))
+            [clojure.string :as string]
+            [clojure.contrib.json :as json]))
 
 ;;
 ;; Validation Helpers
@@ -84,6 +84,12 @@
               (assoc a b v)))
           {}
           keys))
+
+(defn hidden [fname]
+  {:type :hidden
+   :label ""
+   :field-name fname
+   :html [:input {:type "hidden" :name (name fname) :value ""}]})
 
 (defn cancel-button
   ([] (cancel-button "Cancel"))
@@ -161,16 +167,29 @@
   [:div {:class "form-footer"}
    (display-buttons "footer" buttons)])
 
+(defn form-to
+  [[method action attrs] & body]
+  (let [method-str (.toUpperCase (name method))]
+    (-> (if (contains? #{:get :post} method)
+          [:form (merge {:method method-str, :action action} attrs)]
+          [:form (merge {:method "POST", :action action} attrs)
+           (hidden (str "_method") method-str)])
+        (concat body)
+        (vec))))
+
 (defmulti template (fn [& args] (first args)))
 
 (defmethod template :default [_ action options field-table]
            (template :basic action options field-table))
 
-(defmethod template :over-under [_ action {:keys [buttons title]} field-table]
+(defmethod template :over-under [_
+                                 action
+                                 {:keys [buttons title attrs]}
+                                 field-table]
            (let [title (or title "Your Title Goes Here")
                  buttons (or buttons [[:submit] [:cancel]])]
              [:div {:class "sandbar-form"}
-             (form-to [:post (cpath action)]
+             (form-to [:post (cpath action) attrs]
                       (form-header title buttons)
                       field-table
                       (form-footer buttons))]))
@@ -203,10 +222,10 @@
            (concat beginning [new-table] end)
            div))))
 
-(defmethod template :basic [_ action {:keys [buttons]} field-div]
+(defmethod template :basic [_ action {:keys [buttons attrs]} field-div]
            (let [buttons (or buttons [[:submit] [:reset]])]
              [:div {:class "sandbar-form"}
-              (form-to [:post (cpath action)]
+              (form-to [:post (cpath action) attrs]
                        (append-buttons-to-table field-div buttons))]))
 
 (defn form-cancelled?
@@ -241,17 +260,18 @@
    a map of keys to strings. If it is a map then the fname will be looked up
    in this map and the value will be used as the title. In the arity 3 version
    options can either be a map of options or the :required keyword."
-  ([title fname] (textfield title fname {:size 35} :optional))
+  ([title fname] (textfield title fname {} :optional))
   ([title fname options] (if (map? options)
                            (textfield title fname options :optional)
-                           (textfield title fname {:size 35} options)))
+                           (textfield title fname {} options)))
   ([title fname options req]
-     {:type :textfield
-      :label (field-label title fname req)
-      :field-name fname
-      :html [:input
-             (merge {:type "Text" :name (name fname) :value ""
-                     :class "textfield"} options)]}))
+     (let [options (merge {:size 35} options)]
+       {:type :textfield
+       :label (field-label title fname req)
+       :field-name fname
+       :html [:input
+              (merge {:type "Text" :name (name fname) :value ""
+                      :class "textfield"} options)]})))
 
 (defn password
   "Use textfield to create a text field and then change it to a
@@ -340,12 +360,6 @@
 (defn checkbox-group? [field]
   (let [attrs (second field)]
     (= "group" (:class attrs))))
-
-(defn hidden [fname]
-  {:type :hidden
-   :label ""
-   :field-name fname
-   :html [:input {:type "hidden" :name (name fname) :value ""}]})
 
 (defn options [coll key-key value-key]
   (map #(vector :option {:value  (key-key %)} (value-key %)) coll))
@@ -499,13 +513,15 @@
   (let [{:keys [_ label field-name html]} m
         error-message (first (field-name form-state))
         field-row (filter-nil-vec
-                   (:html (set-form-field-value form-state m)))]
-    (if error-message
-      [:div
-       label
-       [:div.error-message error-message]
-       field-row]
-      [:div label field-row])))
+                   (:html (set-form-field-value form-state m)))
+        id (:id (last (:html m)))
+        error-id (when id {:id (str (name id) "-error")})]
+    [:div.sandbar-field
+      label
+      (if error-message
+        [:div.error-message (if id error-id {}) error-message]
+        [:div.error-message (merge {:style "display:none;"} error-id)])
+      field-row]))
 
 (defn- create-hidden-field [form-state m]
   (:html (set-form-field-value form-state m)))
@@ -567,7 +583,7 @@
       original-meta)))
 
 ;;
-;; Making forms easier
+;; Macros to encapsulate common form patters
 ;;
 
 (defn form-routes [resource-uri add-form edit-form submit-fn]
@@ -655,17 +671,58 @@
                 chain)]
     (conj chain `clean-form-input)))
 
-(defn- form-routes-function [resource uri view submit default]
-  `(defn ~resource [layout#]
-     (form-routes ~uri
-                  (fn [request#]
-                    (layout# request#
-                             (~view :add request# ~default)))
-                  (fn [request#]
-                    (layout# request#
-                             (~view :edit request# ~default)))
-                  (fn [request#]
-                    (~submit request# ~default)))))
+(defn- uri-segments [uri]
+  (let [segs (drop 1 (string/split uri #"/"))
+        small (apply str (interleave (repeat "/") (butlast segs)))
+        large (apply str (interleave (repeat "/") segs))]
+    {:small small
+     :large large}))
+
+(defn- ajax-route-pair
+  [segments ajax-route function & args]
+  (let [request (gensym "request_")
+        function-call (apply list function request args)]
+    [`(GET ~(str (:small segments) "/" ajax-route) ~request
+           ~function-call)
+     `(GET ~(str (:large segments) "/" ajax-route) ~request
+           ~function-call)]))
+
+(defn- ajax-routes [ajax uri default]
+  (let [segs (uri-segments uri)
+        route-forms
+        (if-let [[function ajax-route] (:validator ajax)]
+          (ajax-route-pair segs ajax-route function default)
+          [])
+        route-forms
+        (if-let [functions (:functions ajax)]
+          (concat route-forms
+                  (mapcat #(ajax-route-pair segs % %) functions))
+          route-forms)]
+    route-forms))
+
+(defn- form-routes-function
+  ([resource uri view submit default]
+     (form-routes-function resource uri view submit default nil))
+  ([resource uri view submit default ajax]
+     (let [layout-sym (gensym "layout_")
+           form-routes
+           `(form-routes ~uri
+                         (fn [request#]
+                           (~layout-sym request#
+                                        (~view :add request# ~default)))
+                         (fn [request#]
+                           (~layout-sym request#
+                                        (~view :edit request# ~default)))
+                         (fn [request#]
+                           (~submit request# ~default)))
+           all-form-routes (if ajax
+                             (let [ajax-routes (ajax-routes ajax uri default)]
+                               `(routes
+                                 ~@ajax-routes
+                                 ~form-routes))
+                             form-routes)]
+       `(defn ~resource [~layout-sym]
+          ~all-form-routes))))
 
 (defn- ns-sym [s]
   (symbol (str *ns*) (str s)))
@@ -696,6 +753,20 @@
   (let [{:keys [ns name]} (meta (resolve v))]
     (symbol (str ns) (str name))))
 
+(defn- ajax-validator-function [function-name type marshal get-validator]
+  `(defn ~function-name [request# default-type#]
+     (let [params# (:params request#)
+           form-type# (~type :marshal
+                             request#
+                             {}
+                             default-type#)
+           form-data# (~marshal form-type# params#)
+           validator# (~get-validator form-type#)
+           errors# (:_validation-errors (validator# form-data#))]
+       (json/json-str (if errors#
+                        {:status :fail :errors errors#}
+                        {:status :pass})))))
+
 (defmacro defform
   "Define a form and produce a function that will generate the form's routes."
   [resource uri & {:keys [fields on-cancel on-success load]
@@ -705,6 +776,7 @@
                 get-post]}
         (form-symbol-map-memo (ns-sym resource))
         type-fn-sym (gensym "type_")
+        ajax-validator (gensym "ajax_validator_")
         params- (gensym "params_")
         marshal-chain (build-marshal-chain params- fields)
         ;; multimethods
@@ -715,6 +787,7 @@
         on-success (or on-success `(fn [m#] ~uri))
         load (or load `(fn [id#] {}))
         ;; optional
+        attrs (or (:attrs options) {})
         style (or (:style options) :default)
         validator (or (:validator options) `identity)
         properties (or (:properties options) {})
@@ -730,83 +803,103 @@
                      `(~user-marshal (fn [~params-]
                                        (-> ~@marshal-chain))
                                      ~params-)
-                     `(-> ~@marshal-chain))]
-    `(do
-       (def ~properties-def
-            ~properties)
-       (def ~atom (atom '()))
-       (defn ~type-fn-sym [action# request# form-data# default#]
-         (or (first (filter (fn [x#] (not (= x# :default)))
-                            (map (fn [f#] (f# action# request# form-data#))
-                                 @~atom)))
-             default#))
-       (defn ~dispatch-sym [& args#] (first args#))
-       (defmulti ~get-fields ~dispatch-sym)
-       (defmulti ~marshal ~dispatch-sym)
-       (defmulti ~get-layout-sym ~dispatch-sym)
-       (defmulti ~get-validator ~dispatch-sym)
-       (defmulti ~get-title ~dispatch-sym)
-       (defmulti ~get-buttons ~dispatch-sym)
-       (defmulti ~get-post ~dispatch-sym)
-       (defmethod ~get-fields :default [form-type#]
-                  (field-list ~validator ~properties-def
-                              ~@fields))
-       (defmethod ~marshal :default [form-type# ~params-]
-                  ~marshal-fn)
-       (defmethod ~get-layout-sym :default [form-type#]
-                  ~field-layout)
-       (defmethod ~get-validator :default [form-type#]
-                  ~validator)
-       (defmethod ~get-title :default [form-type# type#]
-                  (~title type#))
-       (defmethod ~get-buttons :default [form-type#]
-                  ~buttons)
-       (defmethod ~get-post :default [form-type#]
-                  ~uri)
-       (defn ~submit [request# default-type#]
-         (let [params# (:params request#)
-               uri# (:uri request#)
-               form-type# (~type-fn-sym :marshal request# {} default-type#)
-               {cancel-val# :cancel and-new-val# :save-and-new}
-               (special-button-text (~get-buttons form-type#))]
-           (redirect
-            (if (form-cancelled? params# cancel-val#)
-              ~on-cancel
-              (let [form-data# (~marshal form-type# params#)
-                    failure# (get (:headers request#) "referer")
-                    submit# (get-param params# :submit)
-                    form-type# (~type-fn-sym :validate
-                                             request#
-                                             form-data#
-                                             default-type#)]
-                (if-valid (~get-validator form-type#) form-data#
-                          (fn [m#]
-                            (let [s# (~on-success m#)]
-                              (if (and and-new-val# (= submit# and-new-val#))
-                                uri#
-                                s#)))
-                          (store-errors-and-redirect ~resource-id
-                                                     failure#)))))))
-       (defn ~view [type# request# default-type#]
-         (let [params# (:params request#)
-               form-data# (case type#
-                                :edit (let [id# (get-param params# :id)]
-                                        (~load id#))
-                                ~default-data)
-               form-type# (~type-fn-sym type#
-                                        request#
-                                        form-data#
-                                        default-type#)]
-           (template ~style
-                     (~get-post form-type#)
-                     {:title (~get-title form-type# type#)
-                      :buttons (~get-buttons form-type#)}
-                     (form-layout-grid (~get-layout-sym form-type#)
-                                       ~resource-id
-                                       (~get-fields form-type#)
-                                       request#
-                                       form-data#))))
-       ~(form-routes-function resource uri view submit resource-id))))
+                     `(-> ~@marshal-chain))
+        forms
+        `(do
+           (def ~properties-def ~properties)
+           (def ~atom (atom '()))
+           (defn ~type-fn-sym [action# request# form-data# default#]
+             (or (first (filter (fn [x#] (not (= x# :default)))
+                                (map (fn [f#] (f# action# request# form-data#))
+                                     @~atom)))
+                 default#))
+           (defn ~dispatch-sym [& args#] (first args#))
+           (defmulti ~get-fields ~dispatch-sym)
+           (defmulti ~marshal ~dispatch-sym)
+           (defmulti ~get-layout-sym ~dispatch-sym)
+           (defmulti ~get-validator ~dispatch-sym)
+           (defmulti ~get-title ~dispatch-sym)
+           (defmulti ~get-buttons ~dispatch-sym)
+           (defmulti ~get-post ~dispatch-sym)
+           (defmethod ~get-fields :default [form-type#]
+                      (field-list ~validator ~properties-def
+                                  ~@fields))
+           (defmethod ~marshal :default [form-type# ~params-]
+                      ~marshal-fn)
+           (defmethod ~get-layout-sym :default [form-type#]
+                      ~field-layout)
+           (defmethod ~get-validator :default [form-type#]
+                      ~validator)
+           (defmethod ~get-title :default [form-type# type#]
+                      (~title type#))
+           (defmethod ~get-buttons :default [form-type#]
+                      ~buttons)
+           (defmethod ~get-post :default [form-type#]
+                      ~uri)
+           (defn ~submit [request# default-type#]
+             (let [params# (:params request#)
+                   uri# (:uri request#)
+                   form-type# (~type-fn-sym :marshal request# {} default-type#)
+                   {cancel-val# :cancel and-new-val# :save-and-new}
+                   (special-button-text (~get-buttons form-type#))]
+               (redirect
+                (if (form-cancelled? params# cancel-val#)
+                  ~on-cancel
+                  (let [form-data# (~marshal form-type# params#)
+                        failure# (get (:headers request#) "referer")
+                        submit# (get-param params# :submit)
+                        form-type# (~type-fn-sym :validate
+                                                 request#
+                                                 form-data#
+                                                 default-type#)]
+                    (if-valid (~get-validator form-type#) form-data#
+                              (fn [m#]
+                                (let [s# (~on-success m#)]
+                                  (if (and and-new-val# (= submit# and-new-val#))
+                                    uri#
+                                    s#)))
+                              (store-errors-and-redirect ~resource-id
+                                                         failure#)))))))
+           (defn ~view [type# request# default-type#]
+             (let [params# (:params request#)
+                   form-data# (case type#
+                                    :edit (let [id# (get-param params# :id)]
+                                            (~load id#))
+                                    ~default-data)
+                   form-type# (~type-fn-sym type#
+                                            request#
+                                            form-data#
+                                            default-type#)]
+               (template ~style
+                         (~get-post form-type#)
+                         {:title (~get-title form-type# type#)
+                          :buttons (~get-buttons form-type#)
+                          :attrs ~attrs}
+                         (form-layout-grid (~get-layout-sym form-type#)
+                                           ~resource-id
+                                           (~get-fields form-type#)
+                                           request#
+                                           form-data#)))))
+        forms (if (:ajax-validation-at options)
+                (concat forms
+                        [(ajax-validator-function ajax-validator
+                                                   type-fn-sym
+                                                   marshal
+                                                   get-validator)])
+                forms)
+        forms (let [base-args [resource uri view submit resource-id]
+                    ajax-args (if-let [ajax-validation-uri
+                                       (:ajax-validation-at options)]
+                                {:validator [ajax-validator
+                                             ajax-validation-uri]}
+                                {})
+                    ajax-args (if-let [ajax-functions (:ajax options)]
+                                (merge ajax-args {:functions ajax-functions})
+                                ajax-args)
+                    args (concat base-args [ajax-args])]
+                (concat forms
+                        [(apply form-routes-function args)]))]
+    forms))
 
 (defmacro extend-form
   "Extend a previously defined form. The form can be extended either
@@ -842,8 +935,8 @@
            (defmethod ~get-validator ~with-id [form-type#]
                       (let [v# ~validator]
                         (fn [m#]
-                         (-> ((~get-validator ~resource-id) m#)
-                             v#)))))
+                          (-> ((~get-validator ~resource-id) m#)
+                              v#)))))
         forms (if-let [at (:at options)]
                 (concat forms
                         [(form-routes-function with at view submit with-id)

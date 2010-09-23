@@ -106,7 +106,18 @@
 
 (defn form-password-fixture [field-name value]
   [:input {:size 35 :type "Password" :name field-name :value value
-                 :class "textfield"}])
+           :class "textfield"}])
+
+(defmulti field-fixture (fn [& args] (first args)))
+
+(defmethod field-fixture :textfield [_ label name & {:keys [value flags]}]
+           (let [field-value (or value "")]
+             [:div.sandbar-field
+              (if (contains? flags :required)
+                (test-form-req-label label)
+                (test-form-opt-label label))
+              [:div.error-message {:style "display:none;"}]
+              (form-textfield-fixture name field-value)]))
 
 (deftest test-form-textfield
   (are [args _ e-label exp-name exp-value]
@@ -186,9 +197,7 @@
        (form-checkbox-label-fixture "f1") "name" false
 
        [{:name "Name"} :name {}] :=>
-       (form-checkbox-label-fixture "Name") "name" false
-       
-       ))
+       (form-checkbox-label-fixture "Name") "name" false))
 
 (defn test-form-multi-checkbox [field-name value]
   [:div [:input {:type "Text", :name field-name, :value value}]])
@@ -203,15 +212,14 @@
         (is (= (create-form-field-cell
                 {}
                 (textfield "f1" :name))
-               [:div
-                (test-form-opt-label "f1")
-                (form-textfield-fixture "name" "")])))
+               (field-fixture :textfield "f1" "name"))))
      (t "containing a text area"
         (is (= (create-form-field-cell
                 {}
                 (textarea "f1" :name {}))
-               [:div
+               [:div.sandbar-field
                 (test-form-opt-label "f1")
+                [:div.error-message {:style "display:none;"}]
                 (test-form-textarea "name" "")])))
      (t "containing a checkbox"
         (is (= (create-form-field-cell
@@ -244,18 +252,15 @@
                   [(textfield "f1" :name :required)]
                   {})
                  (test-form-table [1]
-                                  [[:div
-                                    (test-form-req-label "f1")
-                                    (form-textfield-fixture "name" "")]]))))
+                                  [(field-fixture :textfield "f1" "name"
+                                                  :flags #{:required})]))))
        (t "with a single optional text field and no initial state"
           (is (= (form-layout-grid
                   :test
                   [(textfield "f1" :name)]
                   {})
                  (test-form-table [1]
-                                  [[:div
-                                    (test-form-opt-label "f1")
-                                    (form-textfield-fixture "name" "")]]))))
+                                  [(field-fixture :textfield "f1" "name")]))))
        (t "with a single optional text field and an initial state"
           (is (= (form-layout-grid
                   one-column-layout
@@ -264,9 +269,8 @@
                   {}
                   {:name "n"})
                  (test-form-table [1]
-                                  [[:div
-                                    (test-form-opt-label "f1")
-                                    (form-textfield-fixture "name" "n")]]))))
+                                  [(field-fixture :textfield "f1" "name"
+                                                  :value "n")]))))
        (t "with two optional text fields and no initial state"
           (is (= (form-layout-grid
                   :test
@@ -274,12 +278,8 @@
                    (textfield "f2" :age)]
                   {})
                  (test-form-table [1 1]
-                                  [[:div
-                                    (test-form-opt-label "f1")
-                                    (form-textfield-fixture "name" "")]]
-                                  [[:div
-                                    (test-form-opt-label "f2")
-                                    (form-textfield-fixture "age" "")]]))))
+                                  [(field-fixture :textfield "f1" "name")]
+                                  [(field-fixture :textfield "f2" "age")]))))
        (t "explicitly using one column layout - layout vec has 2 of 4 values"
           (is (= (form-layout-grid
                   one-column-layout
@@ -288,12 +288,8 @@
                    (textfield "f2" :age)]
                   {})
                  (test-form-table [1 1]
-                                  [[:div
-                                    (test-form-opt-label "f1")
-                                    (form-textfield-fixture "name" "")]]
-                                  [[:div
-                                    (test-form-opt-label "f2")
-                                    (form-textfield-fixture "age" "")]]))))
+                                  [(field-fixture :textfield "f1" "name")]
+                                  [(field-fixture :textfield "f2" "age")]))))
        (t "using a two column layout"
           (is (= (form-layout-grid
                   [2]
@@ -302,12 +298,8 @@
                    (textfield "f2" :age)]
                   {})
                  (test-form-table [2]
-                                  [[:div
-                                    (test-form-opt-label "f1")
-                                    (form-textfield-fixture "name" "")]]
-                                  [[:div
-                                    (test-form-opt-label "f2")
-                                    (form-textfield-fixture "age" "")]]))))
+                                  [(field-fixture :textfield "f1" "name")]
+                                  [(field-fixture :textfield "f2" "age")]))))
        (t "using a mix of one and two columns"
           (is (= (form-layout-grid
                   [1 2]
@@ -317,15 +309,9 @@
                    (textfield "f3" :title)]
                   {})
                  (test-form-table [1 2]
-                                  [[:div
-                                    (test-form-opt-label "f1")
-                                    (form-textfield-fixture "name" "")]]
-                                  [[:div
-                                    (test-form-opt-label "f2")
-                                    (form-textfield-fixture "age" "")]]
-                                  [[:div
-                                    (test-form-opt-label "f3")
-                                    (form-textfield-fixture "title" "")]]))))
+                                  [(field-fixture :textfield "f1" "name")]
+                                  [(field-fixture :textfield "f2" "age")]
+                                  [(field-fixture :textfield "f3" "title")]))))
        (t "with one hidden field"
           (is (= (form-layout-grid
                   :test
@@ -335,12 +321,8 @@
                   {})
                  [:div
                   (layout-table []
-                                [[:div
-                                  (test-form-opt-label "f1")
-                                  (form-textfield-fixture "name" "")]]
-                                [[:div
-                                  (test-form-opt-label "f2")
-                                  (form-textfield-fixture "age" "")]])
+                                [(field-fixture :textfield "f1" "name")]
+                                [(field-fixture :textfield "f2" "age")])
                   (form-hidden-fixture "title" "")])))
        (t "with two hidden fields"
           (is (= (form-layout-grid
@@ -352,12 +334,8 @@
                   {})
                  [:div
                   (layout-table []
-                                [[:div
-                                  (test-form-opt-label "f1")
-                                  (form-textfield-fixture "name" "")]]
-                                [[:div
-                                  (test-form-opt-label "f2")
-                                  (form-textfield-fixture "age" "")]])
+                                [(field-fixture :textfield "f1" "name")]
+                                [(field-fixture :textfield "f2" "age")])
                   (form-hidden-fixture "title" "")
                   (form-hidden-fixture "id" "")]))))))
 

@@ -13,7 +13,8 @@
                      [mysql/mysql-connector-java "5.1.6"]
                      [carte/carte "0.2.0-SNAPSHOT"]
                      [deview/lein-deview "1.2.0-SNAPSHOT"]
-                     [lein-difftest "1.3.0"]]
+                     [lein-difftest "1.3.0"]
+                     [enlive "1.0.0-SNAPSHOT"]]
   :hooks [leiningen.hooks.difftest]
   :namespaces [sandbar.dev.tables]
   :deview-server 9001
