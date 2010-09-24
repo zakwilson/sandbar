@@ -6,24 +6,65 @@
 ;; the terms of this license.
 ;; You must not remove this notice, or any other, from this software.
 
-(ns sandbar.test_core
+(ns sandbar.core-test
   (:use (clojure test)
-        (sandbar core
-                 test)))
+        (sandbar core test)))
 
-(deftest test-link-to-js
-  (t "link-to-js"
-     (t "with two arguments"
-        (is (= (link-to-js (f "x") "y")
-               [:a {:href "javascript:f('x');"} ["y"]])))
-     (t "with three arguments"
-        (is (= (link-to-js (f "x") "y" :i)
-               [:a {:href "javascript:f_i('x');"} ["y"]])))
-     (t "with hyphen in qualifier"
-        (is (= (link-to-js (f "x") "y" :i-m)
-               [:a {:href "javascript:f_i_m('x');"} ["y"]])))))
+;;
+;; Working with context paths
+;;
 
-(deftest test-append-to-redirect-loc
+(deftest set-app-context!-test
+  (binding [app-context (atom "")]
+    (let [result (set-app-context! "/a")])
+    (is (= @app-context) "/a")))
+
+(deftest cpath-test
+  (binding [app-context (atom "/a")]
+    (is (= (cpath "/b")
+           "/a/b"))
+    (is (= (cpath "b")
+           "b")))
+  (binding [app-context (atom "")]
+    (is (= (cpath "/b")
+           "/b"))
+    (is (= (cpath "b")
+           "b"))))
+
+(deftest remove-cpath-test
+  (binding [app-context (atom "/a")]
+    (is (= (remove-cpath "/a/b")
+           "/b"))
+    (is (= (remove-cpath "/b")
+           "/b"))
+    (is (= (remove-cpath "b")
+           "b")))
+  (binding [app-context (atom "")]
+    (is (= (remove-cpath "/b")
+           "/b"))
+    (is (= (remove-cpath "b")
+           "b"))))
+
+(deftest clink-to-test
+  (binding [app-context (atom "/a")]
+    (is (= (clink-to "/b" "b")
+           [:a {:href "/a/b"} ["b"]]))))
+
+;;
+;; Resource location
+;;
+
+(deftest set-resource-url-prefix!-test
+  (binding [resource-url-prefix (atom "")]
+    (let [result (set-resource-url-prefix! "/a")])
+    (is (= @resource-url-prefix)
+        "/a")))
+
+;;
+;; Redirects
+;;
+
+(deftest append-to-redirect-loc-test
   (t "append to redirect location"
      (binding [app-context (atom "")]
        (t "when append is blank"
@@ -48,3 +89,21 @@
        (t "when there is something to append and there is a context"
           (is (= (append-to-redirect-loc (redirect-301 "/p") "/t")
                  (redirect-301 "/t/p")))))))
+
+;;
+;; HTML Page Helpers
+;;
+
+(deftest link-to-js-test
+  (t "link-to-js"
+     (t "with two arguments"
+        (is (= (link-to-js (f "x") "y")
+               [:a {:href "javascript:f('x');"} ["y"]])))
+     (t "with three arguments"
+        (is (= (link-to-js (f "x") "y" :i)
+               [:a {:href "javascript:f_i('x');"} ["y"]])))
+     (t "with hyphen in qualifier"
+        (is (= (link-to-js (f "x") "y" :i-m)
+               [:a {:href "javascript:f_i_m('x');"} ["y"]])))))
+
+

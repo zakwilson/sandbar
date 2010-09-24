@@ -6,7 +6,7 @@
 ;; the terms of this license.
 ;; You must not remove this notice, or any other, from this software.
 
-(ns sandbar.test-stateful-session
+(ns sandbar.stateful-session-test
   (:require ring.middleware.flash)
   (:use (clojure test)
         (sandbar stateful-session

@@ -7,50 +7,72 @@
 ;; You must not remove this notice, or any other, from this software.
 
 (ns sandbar.core
+  "Common code used throughout Sandbar."
   (:use (hiccup core page-helpers)))
+
+;;
+;; Working with context paths
+;;
 
 (def app-context (atom ""))
 
-(defn set-app-context! [context]
-  (swap! app-context (fn [a b] b) context))
+(defn set-app-context!
+  "Set the context path for this appliation. The context path will be used by
+   cpath and clink-to so that you don't have to repeat it throughout the
+   application."
+  [context]
+  (swap! app-context (constantly context)))
 
-;; configure the location of resources
-(def resource-url-prefix (atom ""))
-
-(defn set-resource-url-prefix! [prefix]
-  (swap! resource-url-prefix (fn [a b] b) prefix))
-
-(defn cpath [path]
+(defn cpath
+  "Prefix a path starting with '/' with the context path."
+  [path]
   (if (.startsWith path "/")
     (str @app-context path)
     path))
 
-(defn remove-cpath [path]
+(defn remove-cpath
+  "Strip the context path from a path."
+  [path]
   (let [c @app-context]
-    (if (not (empty? c))
+    (if (and (not (empty? c))
+             (.startsWith path c))
       (apply str (drop (count c) path))
       path)))
 
-(defn clink-to [path title]
+(defn clink-to
+  "Create a link to path, prefixing the path with the context path."
+  [path title]
   (link-to (cpath path) title))
 
-(defmacro link-to-js [& args]
-  (let [[form title qualifier] args
-        function (str (name (first form)))
-        args (rest form)]
-    `(link-to
-      (str "javascript:"
-           ~function
-           (when ~qualifier
-             (str "_" (.replaceAll (name ~qualifier) "-" "_")))
-           "("
-           (apply str
-                  (interpose ", "
-                             (map (fn [a#] (if (string? a#)
-                                             (str "'" a# "'")
-                                             a#))
-                                  [~@args])))
-           ");") ~title)))
+;;
+;; Resource location
+;;
+
+(def resource-url-prefix (atom ""))
+
+(defn set-resource-url-prefix!
+  "Set the value of the resource-url-prefix. If the resource-url-prefix is the
+   default value then resources are assumed to be under css and js directores.
+   If resources are located in a CDN or under some other base URL then that
+   can be set here."
+  [prefix]
+  (swap! resource-url-prefix (constantly prefix)))
+
+(defn resource-path [s]
+  (if (empty? @resource-url-prefix)
+    (cpath s)
+    (str @resource-url-prefix s)))
+
+(defn css-path []
+  (resource-path "/css/"))
+(defn image-path []
+  (resource-path "/images/"))
+(defn js-path []
+  (resource-path "/js/"))
+
+;;
+;; Redirects
+;;
 
 (defn redirect-301 [url]
   {:status 301
@@ -71,21 +93,30 @@
         m
         (merge m {:headers {"Location" (cpath (str uri-prefix loc))}})))))
 
+;;
+;; Utilities
+;;
+
 (defn property-lookup [p k]
   (k p (name k)))
 
-;; Resource locations under /public
-(defn resource-path [s]
-  (if (empty? @resource-url-prefix)
-    (cpath s)
-    (str @resource-url-prefix s)))
+(defn- filter-param-value [v]
+  (try (Integer/parseInt v)
+       (catch Exception _ (try (BigDecimal. v)
+                               (catch Exception _ v)))))
 
-(defn css-path []
-  (resource-path "/css/"))
-(defn image-path []
-  (resource-path "/images/"))
-(defn js-path []
-  (resource-path "/js/"))
+(defn get-param
+  "Get a parameter from the params map where the key may be a string or
+   a keyword. Automatically coerce numbers."
+  [params key]
+  (let [p (or (get params key) (get params (name key)))]
+    (cond (string? p) (filter-param-value p)
+          (coll? p) (map filter-param-value p)
+          :else p)))
+
+;;
+;; HTML Page Helpers
+;;
 
 (defn stylesheet [name]
   (include-css (str (css-path) name)))
@@ -113,16 +144,21 @@
   ([path name mouseover attrs]
      (link-to (str (cpath path)) (image name mouseover attrs))))
 
-(defn- filter-param-value [v]
-  (try (Integer/parseInt v)
-       (catch Exception _ (try (BigDecimal. v)
-                               (catch Exception _ v)))))
+(defmacro link-to-js [& args]
+  (let [[form title qualifier] args
+        function (str (name (first form)))
+        args (rest form)]
+    `(link-to
+      (str "javascript:"
+           ~function
+           (when ~qualifier
+             (str "_" (.replaceAll (name ~qualifier) "-" "_")))
+           "("
+           (apply str
+                  (interpose ", "
+                             (map (fn [a#] (if (string? a#)
+                                             (str "'" a# "'")
+                                             a#))
+                                  [~@args])))
+           ");") ~title)))
 
-(defn get-param
-  "Get a parameter from the params map where the key may be a string or
-   a keyword. Automatically coerce numbers."
-  [params key]
-  (let [p (or (get params key) (get params (name key)))]
-    (cond (string? p) (filter-param-value p)
-          (coll? p) (map filter-param-value p)
-          :else p)))
