@@ -14,8 +14,10 @@
                      [carte/carte "0.2.0-SNAPSHOT"]
                      [deview/lein-deview "1.2.0-SNAPSHOT"]
                      [lein-difftest "1.3.0"]
-                     [enlive "1.0.0-SNAPSHOT"]]
+                     [enlive "1.0.0-SNAPSHOT"]
+                     [radagast "1.0.0"]]
   :hooks [leiningen.hooks.difftest]
   :namespaces [sandbar.dev.tables]
   :deview-server 9001
-  :deview-loc-ext #{"clj" "js" "css" "xml"})
+  :deview-loc-ext #{"clj" "js" "css" "xml"}
+  :radagast/ns-whitelist #"^sandbar.*")

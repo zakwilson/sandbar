@@ -1,0 +1,2 @@
+lein radagast sandbar.core-test \
+              sandbar.stateful-session-test
