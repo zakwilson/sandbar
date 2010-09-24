@@ -60,6 +60,26 @@
     (is (= @resource-url-prefix)
         "/a")))
 
+(deftest set-resource-url-prefix!-test
+  (binding [app-context (atom "")
+            resource-url-prefix (atom "")]
+    (is (= (resource-path "/b")
+           "/b"))
+    (is (= (resource-path "b")
+           "b")))
+  (binding [app-context (atom "/a")
+            resource-url-prefix (atom "")]
+    (is (= (resource-path "/b")
+           "/a/b"))
+    (is (= (resource-path "b")
+           "b")))
+  (binding [app-context (atom "/a")
+            resource-url-prefix (atom "/c")]
+    (is (= (resource-path "/b")
+           "/c/b"))
+    (is (= (resource-path "b")
+           "b"))))
+
 ;;
 ;; Redirects
 ;;

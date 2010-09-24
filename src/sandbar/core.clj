@@ -58,10 +58,13 @@
   [prefix]
   (swap! resource-url-prefix (constantly prefix)))
 
-(defn resource-path [s]
-  (if (empty? @resource-url-prefix)
-    (cpath s)
-    (str @resource-url-prefix s)))
+(defn resource-path
+  "Get the root path for application resources. If the resource-url-prefix is
+   set, then this prefix will be used, otherwise delegate to cpath."
+  [s]
+  (cond (not (.startsWith s "/")) s
+        (empty? @resource-url-prefix) (cpath s)
+        :else (str @resource-url-prefix s)))
 
 (defn css-path []
   (resource-path "/css/"))
