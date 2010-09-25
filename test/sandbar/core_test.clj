@@ -17,7 +17,7 @@
 (deftest set-app-context!-test
   (binding [app-context (atom "")]
     (let [result (set-app-context! "/a")])
-    (is (= @app-context) "/a")))
+    (is (= @app-context "/a"))))
 
 (deftest cpath-test
   (binding [app-context (atom "/a")]
@@ -66,13 +66,19 @@
     (is (= (resource-path "/b")
            "/b"))
     (is (= (resource-path "b")
-           "b")))
+           "b"))
+    (is (= (css-path) "/css/"))
+    (is (= (image-path) "/images/"))
+    (is (= (js-path) "/js/")))
   (binding [app-context (atom "/a")
             resource-url-prefix (atom "")]
     (is (= (resource-path "/b")
            "/a/b"))
     (is (= (resource-path "b")
-           "b")))
+           "b"))
+    (is (= (css-path) "/a/css/"))
+    (is (= (image-path) "/a/images/"))
+    (is (= (js-path) "/a/js/")))
   (binding [app-context (atom "/a")
             resource-url-prefix (atom "/c")]
     (is (= (resource-path "/b")
