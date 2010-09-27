@@ -8,6 +8,7 @@
 
 (ns sandbar.core-test
   (:use (clojure test)
+        (hiccup page-helpers)
         (sandbar core test)))
 
 ;;
@@ -55,12 +56,13 @@
 ;;
 
 (deftest set-resource-url-prefix!-test
-  (binding [resource-url-prefix (atom "")]
-    (let [result (set-resource-url-prefix! "/a")])
-    (is (= @resource-url-prefix)
-        "/a")))
+  (binding [resource-url-prefix (atom "/b")]
+    (is (= @resource-url-prefix "/b"))
+    (is (do (set-resource-url-prefix! "/a")
+            (= @resource-url-prefix "/a"))))
+  (is (= @resource-url-prefix "")))
 
-(deftest set-resource-url-prefix!-test
+(deftest resource-path-test
   (binding [app-context (atom "")
             resource-url-prefix (atom "")]
     (is (= (resource-path "/b")
@@ -90,6 +92,12 @@
 ;; Redirects
 ;;
 
+(deftest redirect?-test
+  (is (true? (redirect? (redirect-301 "/a"))))
+  (is (true? (redirect? {:status 302
+                        :headers {"Location" "/a"}})))
+  (is (false? (redirect? {:status 200}))))
+
 (deftest append-to-redirect-loc-test
   (t "append to redirect location"
      (binding [app-context (atom "")]
@@ -117,8 +125,73 @@
                  (redirect-301 "/t/p")))))))
 
 ;;
+;; Utilities
+;;
+
+(deftest property-lookup-test
+  (is (= (property-lookup {} :a)
+         "a"))
+  (is (= (property-lookup {:a "b"} :a)
+         "b")))
+
+(deftest get-param-test
+  (let [params {"a" "a" :b "b" "c" "1" :d "2" :e 3}
+        tfn (partial get-param params)]
+    (is (= (tfn :a) "a"))
+    (is (= (tfn :b) "b"))
+    (is (= (tfn :c) 1))
+    (is (= (tfn :d) 2))
+    (is (= (tfn :e) 3))))
+
+;;
 ;; HTML Page Helpers
 ;;
+
+(deftest stylesheet-test
+  (is (= (stylesheet "a.css")
+         (include-css "/css/a.css"))))
+
+(deftest javascript-test
+  (is (= (javascript "a.js")
+         (include-js "/js/a.js"))))
+
+(deftest icon-test
+  (is (= (icon "i.png")
+         [:link {:rel "icon" :type "image/png" :href "/images/i.png"}]))
+  (is (= (icon "i.ico")
+         [:link {:rel "icon" :type "image/vnd.microsoft.icon"
+                 :href "/images/i.ico"}]))
+  (is (= (icon "image/x-icon" "i.ico")
+         [:link {:rel "icon" :type "image/x-icon"
+                 :href "/images/i.ico"}])))
+
+(deftest image-test
+  (is (= (image "a.png")
+         [:img {:src "/images/a.png" :alt "a.png" :border "0"}]))
+  (is (= (image "a.png" {:border "2" :alt "A"})
+         [:img {:src "/images/a.png" :alt "A" :border "2"}]))
+  (is (= (image "a.png" "b.png")
+         [:img {:src "/images/a.png"
+                :alt "a.png"
+                :border "0" 
+                :onmouseout "this.src='/images/a.png'" 
+                :onmouseover "this.src='/images/b.png'"}]))
+  (is (= (image "a.png" "b.png" {:alt "A"})
+         [:img {:src "/images/a.png"
+                :alt "A"
+                :border "0" 
+                :onmouseout "this.src='/images/a.png'" 
+                :onmouseover "this.src='/images/b.png'"}])))
+
+(deftest image-link-test
+  (is (= (image-link "/a" "a.png")
+         (link-to "/a" (image "a.png"))))
+  (is (= (image-link "/a" "a.png" {:alt "A"})
+         (link-to "/a" (image "a.png" {:alt "A"}))))
+  (is (= (image-link "/a" "a.png" "b.png")
+         (link-to "/a" (image "a.png" "b.png"))))
+  (is (= (image-link "/a" "a.png" "b.png" {:alt "A"})
+         (link-to "/a" (image "a.png" "b.png" {:alt "A"})))))
 
 (deftest link-to-js-test
   (t "link-to-js"

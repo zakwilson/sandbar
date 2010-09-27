@@ -100,7 +100,9 @@
 ;; Utilities
 ;;
 
-(defn property-lookup [p k]
+(defn property-lookup
+  "Return the value of the key in the passed map or the name of the key."
+  [p k]
   (k p (name k)))
 
 (defn- filter-param-value [v]
@@ -121,33 +123,57 @@
 ;; HTML Page Helpers
 ;;
 
-(defn stylesheet [name]
+(defn stylesheet
+  "Convert a css file name into the correct path to that file."
+  [name]
   (include-css (str (css-path) name)))
 
-(defn javascript [name]
+(defn javascript
+  "Convert a javascript file name into the correct path to that file."
+  [name]
   (include-js (str (js-path) name)))
 
-(defn icon [name]
-  [:link {:rel "icon" :type "image/png" :href (str (image-path) name)}])
+(defn icon
+  "Create a link to an icon with the correct mime type."
+  ([name]
+     (let [type (last (seq (.split name "[.]")))
+           type (str "image/"
+                     (if (= type "ico")
+                       "vnd.microsoft.icon"
+                       type))]
+       (icon type name)))
+  ([type name]
+     [:link {:rel "icon" :type type :href (str (image-path) name)}]))
 
 (defn image
-  ([name] (image name {:alt name}))
-  ([name attrs] 
-    [:img (merge {:src (str (image-path) name) :border "0"} attrs)]) 
-  ([name mouseover attrs]
-     (let [c-path (image-path)]
-       [:img (merge {:src (str c-path name) :border "0" 
-           :onmouseout (str "this.src='" c-path name "'") 
-           :onmouseover (str "this.src='" c-path mouseover "'")} attrs)])))
+  "Create an image element or an image with a mouseover."
+  ([name] (image name {}))
+  ([name & options]
+     (let [attrs (first (filter map? options))
+           mouseover (first (filter string? options))
+           image-path (image-path)
+           attrs (merge {:src (str image-path name)
+                         :border "0"
+                         :alt name}
+                        attrs)
+           attrs
+           (if mouseover
+             (merge attrs
+                    {:onmouseout (str "this.src='" image-path name "'") 
+                     :onmouseover (str "this.src='" image-path mouseover "'")})
+             attrs)]
+       [:img attrs])))
 
 (defn image-link
+  "Create an image link element.
+   (image-link x y z) is the same as (clink-to x (image y z))."
   ([path name] (image-link path name {:alt name})) 
-  ([path name attrs]
-    (link-to (str (cpath path)) (image name attrs)))
-  ([path name mouseover attrs]
-     (link-to (str (cpath path)) (image name mouseover attrs))))
+  ([path name & options]
+    (clink-to path (apply image name options))))
 
-(defmacro link-to-js [& args]
+(defmacro link-to-js
+  "Create a link that will call a javascript function."
+  [& args]
   (let [[form title qualifier] args
         function (str (name (first form)))
         args (rest form)]
