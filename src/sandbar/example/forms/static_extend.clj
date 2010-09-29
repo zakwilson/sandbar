@@ -7,7 +7,7 @@
         [hiccup.page-helpers :only [link-to]]
         [compojure.core :only [defroutes GET]]
         [sandbar.stateful-session :only [wrap-stateful-session
-                                         set-flash-value!]]
+                                         flash-put!]]
         [sandbar.core :only [get-param]]
         [sandbar.validation :only [build-validator
                                    non-empty-string

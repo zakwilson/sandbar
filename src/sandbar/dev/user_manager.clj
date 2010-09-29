@@ -133,7 +133,7 @@
          (if-valid (user-validator props) form-data
                    #(do
                       (save-or-update-fn :app_user (dissoc % :new_password))
-                      (set-flash-value! :user-message
+                      (flash-put! :user-message
                                         "User has been saved.")
                       success)
                    (store-errors-and-redirect :user failure)))))))

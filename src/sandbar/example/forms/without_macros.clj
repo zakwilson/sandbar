@@ -5,7 +5,7 @@
         [ring.util.response :only [redirect]]
         [compojure.core :only [defroutes GET POST]]
         [sandbar.stateful-session :only [wrap-stateful-session
-                                         set-flash-value!]]
+                                         flash-put!]]
         [sandbar.core :only [icon stylesheet get-param]]
         [sandbar.validation :only [build-validator non-empty-string
                                    if-valid
@@ -81,7 +81,7 @@
          (if-valid user-validator form-data
                    #(do
                       (db/store %)
-                      (set-flash-value! :user-message "User has been saved.")
+                      (flash-put! :user-message "User has been saved.")
                       success)
                    (forms/store-errors-and-redirect :user failure)))))))
 

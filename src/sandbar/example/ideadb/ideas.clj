@@ -162,7 +162,7 @@
   :on-success
   #(do
      (data/save :idea %)
-     (set-flash-value! :user-message "Your idea has been saved.")
+     (flash-put! :user-message "Your idea has been saved.")
      "/ideas")
   :load #(data/fetch-id :idea %)
   :properties idea-properties

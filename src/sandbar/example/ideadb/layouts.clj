@@ -30,7 +30,7 @@
      [:div {:id "page"}
       header
       [:div {:id "content"}
-       (if-let [m (get-flash-value! :user-message)]
+       (if-let [m (flash-get :user-message)]
          [:div {:class "message"}
           m])
        body]

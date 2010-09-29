@@ -7,8 +7,8 @@
         [compojure.core :only [defroutes GET]]
         [sandbar.core :only [icon stylesheet javascript]]
         [sandbar.stateful-session :only [wrap-stateful-session
-                                         set-flash-value!
-                                         get-flash-value]]
+                                         flash-put!
+                                         flash-get]]
         [sandbar.validation :only [add-validation-error
                                    build-validator
                                    non-empty-string]])
@@ -31,7 +31,7 @@
         (stylesheet "ui-lightness/jquery-ui-1.8.4.custom.css")
         (icon "icon.png")]
        [:body
-        (if-let [m (get-flash-value :user-message)] [:div {:class "message"} m])
+        (if-let [m (flash-get :user-message)] [:div {:class "message"} m])
         [:h2 "Sandbar Form Example"]
         content
         (map javascript
@@ -79,7 +79,7 @@
   :on-cancel "/"
   :on-success #(do
                  (db/store %)
-                 (set-flash-value! :user-message "Developer has been saved.")
+                 (flash-put! :user-message "Developer has been saved.")
                  "/")
   :validator #(non-empty-string % :name :hire-date :language properties)
   :properties properties

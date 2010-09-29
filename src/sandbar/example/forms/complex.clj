@@ -6,7 +6,7 @@
         [ring.util.response :only [redirect]]
         [compojure.core :only [defroutes GET]]
         [sandbar.stateful-session :only [wrap-stateful-session
-                                         set-flash-value!]]
+                                         flash-put!]]
         [sandbar.validation :only [build-validator
                                    non-empty-string
                                    integer-number
@@ -73,7 +73,7 @@
   #(do
      (println %)
      (db/store %)
-     (set-flash-value! :user-message "User has been saved.")
+     (flash-put! :user-message "User has been saved.")
      "/")
   :validator validator
   :properties properties

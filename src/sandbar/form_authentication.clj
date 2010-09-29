@@ -14,7 +14,7 @@
                               create-authenticator)]
                  [stateful-session :only (session-get
                                           session-put!
-                                          set-flash-value!
+                                          flash-put!
                                           session-delete-key!)]
                  [core :only (property-lookup)]
                  [validation :only (build-validator
@@ -74,7 +74,7 @@
                                  :roles (:roles %)})
                   (session-delete-key! :auth-redirect-uri)
                   success)
-               #(do (set-flash-value!
+               #(do (flash-put!
                      :login
                      (merge {:form-data (dissoc (into {} %1)
                                                 :username

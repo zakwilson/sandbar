@@ -5,7 +5,7 @@
         [ring.middleware.file :only [wrap-file]]
         [compojure.core :only [defroutes GET]]
         [sandbar.stateful-session :only [wrap-stateful-session
-                                         set-flash-value!]])
+                                         flash-put!]])
   (:require [compojure.route :as route]
             [sandbar.forms :as forms]
             [sandbar.example.forms.database :as db]
@@ -19,7 +19,7 @@
   :on-success
   #(do
      (db/store %)
-     (set-flash-value! :user-message "User has been saved.")
+     (flash-put! :user-message "User has been saved.")
      "/"))
 
 (defroutes routes

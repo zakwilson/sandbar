@@ -10,8 +10,8 @@
   "Forms and form layouts."
   (:use [ring.util.response :only [redirect]]
         [compojure.core :only [routes GET POST]]
-        [sandbar.stateful-session :only [set-flash-value!
-                                         get-flash-value]]
+        [sandbar.stateful-session :only [flash-put!
+                                         flash-get]]
         [sandbar.core :only [cpath get-param property-lookup]]
         [sandbar.validation :only [if-valid
                                    required-fields
@@ -28,8 +28,8 @@
 
 (defn store-errors-and-redirect [name redirect-page]
   (fn [form-data errors]
-    (do (set-flash-value! name
-                          (merge {:form-data form-data} errors))
+    (do (flash-put! name
+                    (merge {:form-data form-data} errors))
         redirect-page)))
 
 ;;
@@ -560,7 +560,7 @@
   ([layout form-name coll request]
      (form-layout-grid layout form-name coll request {}))
   ([layout form-name coll request init-data]
-     (if-let [form-state (get-flash-value form-name)]
+     (if-let [form-state (flash-get form-name)]
        (form-layout-grid* form-name layout form-state coll)
        (form-layout-grid* form-name layout {:form-data init-data} coll))))
 

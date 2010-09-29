@@ -6,7 +6,7 @@
         [ring.middleware.file :only [wrap-file]]
         [compojure.core :only [defroutes GET]]
         [sandbar.stateful-session :only [wrap-stateful-session
-                                         set-flash-value!]]
+                                         flash-put!]]
         [sandbar.validation :only [add-validation-error]])
   (:require [compojure.route :as route]
             [sandbar.forms :as forms]
@@ -21,7 +21,7 @@
   :on-success
   #(do
      (db/store %)
-     (set-flash-value! :user-message "User has been saved.")
+     (flash-put! :user-message "User has been saved.")
      "/")
   :validator
   #(if (< (count (:username %)) 5)

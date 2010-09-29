@@ -55,8 +55,8 @@
 (deftest test-authenticate!
   (let [auth-source (form-authentication-adapter test-login-load-fn {})]
     (t "authenticate!"
-       (binding [*sandbar-session* (atom {})
-                 *sandbar-flash* (atom {})]
+       (binding [sandbar-session (atom {})
+                 sandbar-flash (atom {})]
          (t "with missing username"
             (is (= (authenticate! auth-source
                                   {"password" "x"})
@@ -66,28 +66,28 @@
                                  {"username" "u"})
                   (redirect "login")))))
       (t "with correct password"
-         (binding [*sandbar-flash* (atom {})
-                   *sandbar-session* (atom {:auth-redirect-uri "/test"})]
+         (binding [sandbar-flash (atom {})
+                   sandbar-session (atom {:auth-redirect-uri "/test"})]
            (let [result (authenticate! auth-source
                                        {"username" "u" "password" "test"})]
              (is (= result
                     (redirect "/test")))
-             (is (= @*sandbar-session*
+             (is (= @sandbar-session
                     {:current-user {:name "u"
                                     :roles #{:admin}}})))))
       (t "with incorrect password"
-         (binding [*sandbar-flash* (atom {})
-                   *sandbar-session* (atom {:auth-redirect-uri "/test"})]
+         (binding [sandbar-flash (atom {})
+                   sandbar-session (atom {:auth-redirect-uri "/test"})]
            (let [result (authenticate! auth-source
                                        {"username" "u" "password" "wrong"})]
              (is (= result
                     (redirect "login")))
-             (is (= (:auth-redirect-uri @*sandbar-session*)
+             (is (= (:auth-redirect-uri @sandbar-session)
                     "/test"))))))))
 
 (deftest test-with-security-with-form-auth
-  (binding [*sandbar-session* (atom {})
-            *sandbar-flash* (atom {})]
+  (binding [sandbar-session (atom {})
+            sandbar-flash (atom {})]
     (t "with security using form authentication"
        (t "url config"
           (let [with-security (partial with-security
@@ -99,7 +99,7 @@
                              {:uri "/admin/page"})]
                  (is (= result
                         (redirect "/login")))
-                 (is (= (:auth-redirect-uri @*sandbar-session*)
+                 (is (= (:auth-redirect-uri @sandbar-session)
                         "/admin/page"))))
             (t "redirect to login with a uri-prefix"
                (is (= ((with-security form-authentication "/prefix")
@@ -109,9 +109,9 @@
                (is (= ((with-security form-authentication)
                        {:uri "/test.css"})
                       "/test.css")))
-            (binding [*sandbar-flash* (atom {})
-                      *sandbar-session* (atom {:current-user {:name "testuser"
-                                                              :roles #{:user}}})]
+            (binding [sandbar-flash (atom {})
+                      sandbar-session (atom {:current-user {:name "testuser"
+                                                            :roles #{:user}}})]
               (t "redirect to permission denied when valid user without role"
                  (is (= ((with-security form-authentication)
                          {:uri "/admin/page"})

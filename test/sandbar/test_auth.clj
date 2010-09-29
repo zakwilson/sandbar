@@ -319,7 +319,7 @@
 (deftest test-with-security
   (t "with security"
      (t "url config"
-        (binding [*sandbar-session* (atom {})
+        (binding [sandbar-session (atom {})
                   app-context (atom "")]
           (t "and some other kind of auth, redirect to PD when not in role"
              (is (= ((with-security :uri fixture-security-config
@@ -332,7 +332,7 @@
                      {:uri "/some/page"})
                     "/some/page")))))
      (t "and NO url config"
-        (binding [*sandbar-session* (atom {})
+        (binding [sandbar-session (atom {})
                   app-context (atom "")]
           (t "redirect to authentication error page when in auth-err loop"
              (is (= ((with-security

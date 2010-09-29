@@ -244,7 +244,7 @@
                    [:input {:type "checkbox", :name :name, :value "b"} "b"]]]]])))))
 
 (deftest test-form-layout
-  (binding [*sandbar-session* (atom {})]
+  (binding [sandbar-session (atom {})]
     (t "create form layout"
        (t "with a single required text field and no initial state"
           (is (= (form-layout-grid

@@ -9,20 +9,13 @@
 (ns sandbar.stateful-session-test
   (:require ring.middleware.flash)
   (:use (clojure test)
+        (ring.middleware.session store)
         (sandbar stateful-session
                  [test :only (t)])))
 
 (def session-key :sandbar.stateful-session/session)
 
-(deftest test-session-put!
-  (t "put in session"
-     (t "one element"
-        (binding [*sandbar-session* (atom {})]
-          (is (= (-> (session-put! :t "t")
-                     :t)
-                 "t"))))))
-
-(deftest test-stateful-session
+(deftest wrap-stateful-session*-test
   (t "stateful session"
      (t "input empty, session in response"
         (is (= ((wrap-stateful-session* (fn [r] {:session {:a "a"}})) {})
@@ -137,5 +130,53 @@
         (is (= ((wrap-stateful-session*
                  (fn [r] nil)) {:session {}})
                nil)))))
+
+(deftype TestSessionStore [session-map]
+  SessionStore
+  (read-session [_ _]
+    (@session-map :s {}))
+  (write-session [_ _ data]
+    (swap! session-map assoc :s data))
+  (delete-session [_ _]
+    (swap! session-map dissoc :s)))
+
+(defn test-session-store []
+  (TestSessionStore. (atom {})))
+
+(deftest warp-stateful-session-test
+  (let [store (test-session-store)
+        handler (fn [r] (do (session-put! :x 1)
+                            {:status 200 :body "hello"}))
+        handler (wrap-stateful-session handler {:store store})
+        result (handler {})]
+    (is (= (:body result) "hello"))
+    (is (= (-> (read-session store nil) session-key :x) 1))))
+
+(deftest update-session!-test
+  (binding [sandbar-session (atom {})]
+    (is (= (:t (update-session! (fn [a b] (assoc a :t b)) "t"))
+           "t"))))
+
+(deftest session-put!-test
+  (binding [sandbar-session (atom {})]
+    (let [r (session-put! :t "t")]
+      (is (= (session-get :t) "t")))))
+
+(deftest session-get-test
+  (binding [sandbar-session (atom {})]
+    (let [r (session-put! :t "t")]
+      (is (= (session-get :t) "t")))))
+
+(deftest flash-put!-test
+  (binding [sandbar-flash (atom {})]
+    (let [r (flash-put! :t "t")]
+      (is (= (flash-get :t) "t")))))
+
+(deftest flash-get-test
+  (binding [sandbar-flash (atom {})]
+    (let [r (flash-put! :t "t")]
+      (is (= (flash-get :t) "t")))))
+
+
 
 

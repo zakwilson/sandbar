@@ -10,8 +10,8 @@
   "Middleware for working with 'stateful' sessions."
   (:use (ring.middleware flash session)))
 
-(declare *sandbar-session*)
-(declare *sandbar-flash*)
+(declare sandbar-session)
+(declare sandbar-flash)
 
 (defn wrap-stateful-session*
   "Add stateful sessions to a ring handler. Does not modify the functional
@@ -22,14 +22,12 @@
    Ring's flash middleware."
   [handler]
   (fn [request]
-    (binding [*sandbar-session* (atom
-                                 (-> request :session ::session))
-              *sandbar-flash* (atom
-                               {:incoming (-> request :flash)})]
+    (binding [sandbar-session (atom (-> request :session ::session))
+              sandbar-flash (atom {:incoming (-> request :flash)})]
       (let [request (update-in request [:session] dissoc ::session)
             response (handler request)
-            sandbar-session @*sandbar-session*
-            outgoing-flash (merge (:outgoing @*sandbar-flash*)
+            sandbar-session @sandbar-session
+            outgoing-flash (merge (:outgoing @sandbar-flash)
                                   (:flash response))
             sandbar-session (if (empty? sandbar-session)
                               nil
@@ -62,47 +60,36 @@
          (wrap-session options))))
 
 (defn update-session! [update-fn value]
-  (swap! *sandbar-session* update-fn value))
+  (swap! sandbar-session update-fn value))
 
 (defn session-put! [k v]
-  (swap! *sandbar-session* (fn [a b] (merge a {k b})) v))
+  (swap! sandbar-session (fn [a b] (merge a {k b})) v))
 
 (defn session-get
   ([k] (session-get k nil))
   ([k default] (if (vector? k)
-                 (get-in @*sandbar-session* k)
-                 (get @*sandbar-session* k default))))
+                 (get-in @sandbar-session k)
+                 (get @sandbar-session k default))))
 
 (defn session-delete-key! [k]
-  (swap! *sandbar-session* (fn [a b] (dissoc a b)) k))
+  (swap! sandbar-session (fn [a b] (dissoc a b)) k))
 
 (defn destroy-session! []
-  (swap! *sandbar-session* (constantly nil)))
+  (swap! sandbar-session (constantly nil)))
 
-(defn set-flash-value!
+(defn flash-put!
   "Add a value to the flash in such a way that it is available in both
    this request and the next."
   [k v]
-  (swap! *sandbar-flash* (fn [a b] (-> a
-                                       (assoc-in [:outgoing k] b)
-                                       (assoc-in [:incoming k] b))) v))
+  (swap! sandbar-flash (fn [a b] (-> a
+                                     (assoc-in [:outgoing k] b)
+                                     (assoc-in [:incoming k] b))) v))
 
-(defn get-flash-value!
-  "Get a value from the flash which may have been added during the current or
-   previous request. Deprecated. Prefer 'get-flash-value'. This function is no
-   longer destructive."
-  {:deprecated "0.3.0"}
-  [k]
-  (try (-> @*sandbar-flash*
-           :incoming
-           k)
-       (catch Exception _ nil)))
-
-(defn get-flash-value
+(defn flash-get
   "Get a value from the flash which may have been added during the current or
    previous request."
   [k]
-  (try (-> @*sandbar-flash*
+  (try (-> @sandbar-flash
            :incoming
            k)
        (catch Exception _ nil)))

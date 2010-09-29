@@ -10,8 +10,8 @@
         [hiccup.core :only [html]]
         [hiccup.page-helpers :only [doctype link-to]]
         [sandbar.stateful-session :only [wrap-stateful-session
-                                         set-flash-value!
-                                         get-flash-value]]
+                                         flash-put!
+                                         flash-get]]
         [sandbar.core :only [icon stylesheet get-param]]
         [sandbar.validation :only [build-validator
                                    non-empty-string
@@ -71,7 +71,7 @@
   :on-success
   #(do
      (db/store %)
-     (set-flash-value! :user-message "User has been saved.")
+     (flash-put! :user-message "User has been saved.")
      "/")
   :validator validator
   :properties properties

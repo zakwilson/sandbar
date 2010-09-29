@@ -2,7 +2,7 @@
   "Common views which are used by all of the form examples."
   (:use [hiccup.core :only [html]]
         [hiccup.page-helpers :only [doctype link-to]]
-        [sandbar.stateful-session :only [get-flash-value]]
+        [sandbar.stateful-session :only [flash-get]]
         [sandbar.core :only [icon stylesheet]])
   (:require [sandbar.example.forms.database :as db]))
 
@@ -15,7 +15,7 @@
      (stylesheet "sandbar-forms.css")
      (icon "icon.png")]
     [:body
-     (if-let [m (get-flash-value :user-message)] [:div {:class "message"} m])
+     (if-let [m (flash-get :user-message)] [:div {:class "message"} m])
      [:h2 "Sandbar Form Example"]
      content]]))
 
