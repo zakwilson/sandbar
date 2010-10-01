@@ -9,7 +9,7 @@
 (ns sandbar.dev.tables
   "HTML tables which may be filtered, sorted and paged."
   (:use (ring.util [codec :only (url-encode)])
-        (clojure.contrib (json :only (json-str)))
+        (clojure.contrib [json :only (json-str)])
         (hiccup core page-helpers)
         (sandbar core stateful-session)))
 
