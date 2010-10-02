@@ -22,8 +22,7 @@
             [clojure.contrib.json :as json]))
 
 ;;
-;; Validation Helpers
-;; ==================
+;; Utilities
 ;;
 
 (defn store-errors-and-redirect [name redirect-page]
@@ -31,53 +30,6 @@
     (do (flash-put! name
                     (merge {:form-data form-data} errors))
         redirect-page)))
-
-;;
-;; Form Layout
-;; ===========
-;;
-
-(defn layout-table
-  "Create a table using the layout vector. The layout vector is a vector of
-   integers, one for each row indicating the number of cell that go in that
-   row. If the number of cells in a row is less than the max value then
-   the last cell will be given a colspan value that is large enough to fill
-   the table."
-  [layout & cell-values]
-  (loop [layout (take (count cell-values) (concat layout (repeat 1)))
-         max-width (apply max layout)
-         cell-values (filter #(not (nil? %)) cell-values)
-         rows []]
-    (if (seq cell-values)
-      (let [row-cell-values (take (first layout) cell-values)
-            final-colspan (+ 1 (- max-width (count row-cell-values)))
-            row-values (map #(vector 1 %) row-cell-values)
-            row-values (if (> final-colspan 1)
-                         (concat (butlast row-values)
-                                 [[final-colspan (last (last row-values))]])
-                         row-values)]
-        (recur (rest layout)
-               max-width
-               (drop (first layout) cell-values)
-               (if (seq row-values)
-                 (conj rows
-                       (vec
-                        (concat [:tr]
-                                (vec
-                                 (map #(let [cell-value (last %)
-                                             cell-value (if (vector? cell-value)
-                                                          cell-value
-                                                          [cell-value])]
-                                         (vec
-                                          (if (> (first %) 1)
-                                            (concat [:td {:valign "top"
-                                                          :colspan (first %)}]
-                                                    cell-value)
-                                            (concat [:td {:valign "top"}]
-                                                    cell-value))))
-                                      row-values)))))
-                 rows)))
-      (vec (concat [:table] rows)))))
 
 (defn get-params
   "Get params from a map where the keys may be strings or keywords."
@@ -88,11 +40,190 @@
           {}
           keys))
 
+(defn filter-nil-vec [coll]
+  (vec (filter #(not (nil? %)) coll)))
+
+(defn form-cancelled?
+  ([params]
+     (form-cancelled? params "Cancel"))
+  ([params value]
+     (let [cancel-values (conj #{"cancel" "Cancel"} value)
+           cancel (get-param params :cancel)]
+       (contains? cancel-values cancel))))
+
+(defn nil-or-empty-string? [v]
+  (or (not v)
+      (and (string? v)
+           (empty? v))))
+
+(defn clean-form-input
+  "Set empty values to nil and remove the id if it is nil."
+  [m]
+  (let [original-meta (meta m)]
+    (with-meta
+      (apply merge
+             (map #(hash-map (first %)
+                             (let [value (last %)]
+                               (if (nil-or-empty-string? value)
+                                 nil
+                                 value)))
+                  (if (not (nil-or-empty-string? (:id m)))
+                    m
+                    (dissoc m :id))))
+      original-meta)))
+
+;;
+;; Form Elements
+;;
+
+(defn field-label [title key req]
+  (let [title (if (map? title)
+                (property-lookup title key)
+                title)
+        req (cond (keyword? req) req
+                  (contains? (set req) key) :required
+                  :else :optional)]
+    [:div {:class "field-label"} title
+     (if (= req :required) [:span {:class "required"} "*"] "")]))
+
 (defn hidden [fname]
   {:type :hidden
    :label ""
    :field-name fname
    :html [:input {:type "hidden" :name (name fname) :value ""}]})
+
+(defn textarea
+  ([title fname] (textarea title fname {} :optional))
+  ([title fname options] (textarea title fname options :optional))
+  ([title fname options req]
+     {:type :textarea
+      :label (field-label title fname req)
+      :field-name fname
+      :html [:textarea (merge {:name (name fname)} options)]}))
+
+(defn htmlfield
+  ([fname content]
+     (htmlfield nil content {:id fname}))
+  ([title content options & more]
+     (let [fname (:id options)]
+       {:type :htmlfield
+        :label (if title (field-label title fname :optional) [:div])
+        :field-name fname
+        :html [:div options content]})))
+
+(defn textfield
+  "Create a form text field. In each arity, title can be either a string or
+   a map of keys to strings. If it is a map then the fname will be looked up
+   in this map and the value will be used as the title. In the arity 3 version
+   options can either be a map of options or the :required keyword."
+  ([title fname] (textfield title fname {} :optional))
+  ([title fname options] (if (map? options)
+                           (textfield title fname options :optional)
+                           (textfield title fname {} options)))
+  ([title fname options req]
+     (let [options (merge {:size 35} options)]
+       {:type :textfield
+       :label (field-label title fname req)
+       :field-name fname
+       :html [:input
+              (merge {:type "Text" :name (name fname) :value ""
+                      :class "textfield"} options)]})))
+
+(defn password
+  "Use textfield to create a text field and then change it to a
+   password field."
+  [& args]
+  (let [textfield (apply textfield args)]
+    (-> textfield
+        (assoc :type :password)
+        (assoc :html [:input (merge (last (:html textfield))
+                                    {:type "Password"})]))))
+
+(defn checkbox
+  "Create a form checkbox. The title can be a map or a string. If it is a map
+   then the displayed title will be looked up in the map using fname."
+  ([title fname] (checkbox title fname {}))
+  ([title fname options]
+     {:type :checkbox
+      :label [:span {:class "field-label"} (if (map? title)
+                                             (property-lookup title fname)
+                                             title)]
+      :field-name fname
+      :html [:input
+             (merge {:type "checkbox"
+                     :name (name fname)
+                     :value "checkbox-true"} options)]}))
+
+(defn wrap-checkboxes-in-group [coll]
+  [:div {:class "group"}
+     (map #(vector :div {:class "group-checkbox"} %) coll)])
+
+(defn multi-checkbox
+  ([props many-spec]
+     (multi-checkbox props
+                     (:alias many-spec)
+                     ((:all-items many-spec))
+                     (:name-fn many-spec)))
+  ([props fname coll value-fn]
+     {:type :multi-checkbox
+      :label [:span {:class "group-title"} (property-lookup props fname)]
+      :field-name fname
+      :html (wrap-checkboxes-in-group
+              (map
+               #(let [value (value-fn %)]
+                  [:input
+                   {:type "checkbox" :name fname :value value}
+                   (property-lookup props (keyword value))])
+               coll))
+      :value-fn value-fn}))
+
+(defn- options [coll key-key value-key]
+  (map #(vector :option {:value  (key-key %)} (value-key %)) coll))
+
+(defn select
+  "Create a select form element."
+  ([title fname coll kvs & optional]
+     (let [key-and-value (first (dissoc kvs :prompt))
+           prompt (first (:prompt kvs))
+           k (key key-and-value)
+           v (val key-and-value)
+           opts (first (filter map? optional))
+           req (first (filter #(not (map? %)) optional))
+           options (options coll k v)
+           select-html [:select (merge {:name (name fname)} opts)]
+           select-html (if prompt
+                         (concat select-html
+                                 [[:option
+                                   {:value (key prompt)} (val prompt)]])
+                         select-html)]
+       {:type :select
+        :label (field-label title fname req)
+        :field-name fname
+        :html (vec
+               (concat
+                select-html
+                options))
+        :value-fn k})))
+
+(defn multi-select [title fname coll kv & optional]
+  (let [kv (dissoc kv :prompt)
+        opts (merge {:multiple true :size 5} (first (filter map? optional)))
+        req (first (filter #(not (map? %)) optional))]
+    (select title fname coll kv opts req)))
+
+(defn form-to
+  [[method action attrs] & body]
+  (let [method-str (.toUpperCase (name method))]
+    (-> (if (contains? #{:get :post} method)
+          [:form (merge {:method method-str, :action action} attrs)]
+          [:form (merge {:method "POST", :action action} attrs)
+           (hidden (str "_method") method-str)])
+        (concat body)
+        (vec))))
+
+;;
+;; Buttons
+;;
 
 (defn cancel-button
   ([] (cancel-button "Cancel"))
@@ -157,47 +288,7 @@
       [:span {:class (str class-prefix "-buttons")}]
       (interleave (map create-form-button buttons) (cycle ["&nbsp;"]))))))
 
-(defn form-header [form-title buttons]
-  [:div {:class "form-header"}
-   [:table
-    [:tr
-     [:td
-      [:span {:class "form-title"} form-title]]
-     [:td {:align "right"}
-      (display-buttons "header" buttons)]]]])
-
-(defn form-footer [buttons]
-  [:div {:class "form-footer"}
-   (display-buttons "footer" buttons)])
-
-(defn form-to
-  [[method action attrs] & body]
-  (let [method-str (.toUpperCase (name method))]
-    (-> (if (contains? #{:get :post} method)
-          [:form (merge {:method method-str, :action action} attrs)]
-          [:form (merge {:method "POST", :action action} attrs)
-           (hidden (str "_method") method-str)])
-        (concat body)
-        (vec))))
-
-(defmulti template (fn [& args] (first args)))
-
-(defmethod template :default [_ action options field-table]
-           (template :basic action options field-table))
-
-(defmethod template :over-under [_
-                                 action
-                                 {:keys [buttons title attrs]}
-                                 field-table]
-           (let [title (or title "Your Title Goes Here")
-                 buttons (or buttons [[:submit] [:cancel]])]
-             [:div {:class "sandbar-form"}
-             (form-to [:post (cpath action) attrs]
-                      (form-header title buttons)
-                      field-table
-                      (form-footer buttons))]))
-
-(defn get-colspan [rows]
+(defn- get-colspan [rows]
   (let [cells (drop 1 (first rows))]
     (reduce (fn [colspan cell]
               (if (map? (second cell))
@@ -225,81 +316,9 @@
            (concat beginning [new-table] end)
            div))))
 
-(defmethod template :basic [_ action {:keys [buttons attrs]} field-div]
-           (let [buttons (or buttons [[:submit] [:reset]])]
-             [:div {:class "sandbar-form"}
-              (form-to [:post (cpath action) attrs]
-                       (append-buttons-to-table field-div buttons))]))
-
-(defn form-cancelled?
-  ([params]
-     (form-cancelled? params "Cancel"))
-  ([params value]
-     (let [cancel-values (conj #{"cancel" "Cancel"} value)
-           cancel (get-param params :cancel)]
-       (contains? cancel-values cancel))))
-
-(defn field-label [title key req]
-  (let [title (if (map? title)
-                (property-lookup title key)
-                title)
-        req (cond (keyword? req) req
-                  (contains? (set req) key) :required
-                  :else :optional)]
-    [:div {:class "field-label"} title
-     (if (= req :required) [:span {:class "required"} "*"] "")]))
-
-(defn textarea
-  ([title fname] (textarea title fname {} :optional))
-  ([title fname options] (textarea title fname options :optional))
-  ([title fname options req]
-     {:type :textarea
-      :label (field-label title fname req)
-      :field-name fname
-      :html [:textarea (merge {:name (name fname)} options)]}))
-
-(defn textfield
-  "Create a form text field. In each arity, title can be either a string or
-   a map of keys to strings. If it is a map then the fname will be looked up
-   in this map and the value will be used as the title. In the arity 3 version
-   options can either be a map of options or the :required keyword."
-  ([title fname] (textfield title fname {} :optional))
-  ([title fname options] (if (map? options)
-                           (textfield title fname options :optional)
-                           (textfield title fname {} options)))
-  ([title fname options req]
-     (let [options (merge {:size 35} options)]
-       {:type :textfield
-       :label (field-label title fname req)
-       :field-name fname
-       :html [:input
-              (merge {:type "Text" :name (name fname) :value ""
-                      :class "textfield"} options)]})))
-
-(defn password
-  "Use textfield to create a text field and then change it to a
-   password field."
-  [& args]
-  (let [textfield (apply textfield args)]
-    (-> textfield
-        (assoc :type :password)
-        (assoc :html [:input (merge (last (:html textfield))
-                                    {:type "Password"})]))))
-
-(defn checkbox
-  "Create a form checkbox. The title can be a map or a string. If it is a map
-   then the displayed title will be looked up in the map using fname."
-  ([title fname] (checkbox title fname {}))
-  ([title fname options]
-     {:type :checkbox
-      :label [:span {:class "field-label"} (if (map? title)
-                                             (property-lookup title fname)
-                                             title)]
-      :field-name fname
-      :html [:input
-             (merge {:type "checkbox"
-                     :name (name fname)
-                     :value "checkbox-true"} options)]}))
+;;
+;; Marshal and Binding data
+;;
 
 (defn get-yes-no-fields
   "Get Y or N values for all keys in cb-set. These keys represent checkboxes
@@ -320,32 +339,6 @@
             new-map
             cb-set)))
 
-(defn wrap-checkboxes-in-group [coll]
-  [:div {:class "group"}
-     (map #(vector :div {:class "group-checkbox"} %) coll)])
-
-(defn multi-checkbox
-  ([props many-spec]
-     (multi-checkbox props
-                     (:alias many-spec)
-                     ((:all-items many-spec))
-                     (:name-fn many-spec)))
-  ([props fname coll value-fn]
-     {:type :multi-checkbox
-      :label [:span {:class "group-title"} (property-lookup props fname)]
-      :field-name fname
-      :html (wrap-checkboxes-in-group
-              (map
-               #(let [value (value-fn %)]
-                  [:input
-                   {:type "checkbox" :name fname :value value}
-                   (property-lookup props (keyword value))])
-               coll))
-      :value-fn value-fn}))
-
-(defn filter-nil-vec [coll]
-  (vec (filter #(not (nil? %)) coll)))
-
 (defn get-multi-checkbox
   "Add the key k to the map m where the value of k is is a vector of
    selected values."
@@ -356,56 +349,12 @@
         selected (filter #(contains? selected-values (name-fn %)) all-values)]
     (assoc m k selected)))
 
-(defn checkbox? [field]
-  (let [attrs (second field)]
-    (= "checkbox" (:type attrs))))
-
-(defn checkbox-group? [field]
-  (let [attrs (second field)]
-    (= "group" (:class attrs))))
-
-(defn options [coll key-key value-key]
-  (map #(vector :option {:value  (key-key %)} (value-key %)) coll))
-
-(defn select
-  "Create a select form element."
-  ([title fname coll kvs & optional]
-     (let [key-and-value (first (dissoc kvs :prompt))
-           prompt (first (:prompt kvs))
-           k (key key-and-value)
-           v (val key-and-value)
-           opts (first (filter map? optional))
-           req (first (filter #(not (map? %)) optional))
-           options (options coll k v)
-           select-html [:select (merge {:name (name fname)} opts)]
-           select-html (if prompt
-                         (concat select-html
-                                 [[:option
-                                   {:value (key prompt)} (val prompt)]])
-                         select-html)]
-       {:type :select
-        :label (field-label title fname req)
-        :field-name fname
-        :html (vec
-               (concat
-                select-html
-                options))
-        :value-fn k})))
-
-(defn multi-select [title fname coll kv & optional]
-  (let [kv (dissoc kv :prompt)
-        opts (merge {:multiple true :size 5} (first (filter map? optional)))
-        req (first (filter #(not (map? %)) optional))]
-    (select title fname coll kv opts req)))
-
 (defn get-multi-select
   "Add the key k to the map m where the value of k is a vector of
    selected values."
   [m params k all-values name-fn & more]
   (let [name-fn (if (map? name-fn) (key (first name-fn)) name-fn)]
     (get-multi-checkbox m params k all-values name-fn)))
-
-(defmulti set-form-field-value (fn [a b] (:type b)))
 
 (defn- set-form-field-value* [form-state input-field update-fn]
   (let [field-name (:field-name input-field)
@@ -423,6 +372,11 @@
             (vector :input
                     (assoc
                         (last html) :value previous-value))))))
+
+(defmulti set-form-field-value (fn [a b] (:type b)))
+
+(defmethod set-form-field-value :default [state field]
+           field)
 
 (defmethod set-form-field-value :textfield [form-state input-field]
   (set-input-form-field-value form-state input-field))
@@ -454,15 +408,17 @@
   (let [field-name (:field-name input-field)
         input-html (:html input-field)
         previous-val ((keyword field-name) (:form-data form-state))
-        value-set (set (if (coll? previous-val)
-                         (map #((:value-fn input-field) %) previous-val)
-                         [previous-val]))]
-    (if (seq value-set)
+        values (if (coll? previous-val)
+                 (map #((:value-fn input-field) %) previous-val)
+                 [previous-val])]
+    (if (seq values)
       (assoc input-field :html
              (apply vector
                     (map #(if (and (vector? %)
                                    (= :option (first %))
-                                   (contains? value-set (:value (second %))))
+                                   (some (fn [x]
+                                           (= (:value (second %)) x))
+                                         values))
                             [:option {:value (:value (second %))
                                       :selected "selected"}
                              (last %)]
@@ -486,6 +442,52 @@
                             checkboxes)]
     (assoc input-field :html
            (wrap-checkboxes-in-group new-checkboxes))))
+
+;;
+;; Layout
+;;
+
+(defn layout-table
+  "Create a table using the layout vector. The layout vector is a vector of
+   integers, one for each row indicating the number of cell that go in that
+   row. If the number of cells in a row is less than the max value then
+   the last cell will be given a colspan value that is large enough to fill
+   the table."
+  [layout & cell-values]
+  (loop [layout (take (count cell-values) (concat layout (repeat 1)))
+         max-width (apply max layout)
+         cell-values (filter #(not (nil? %)) cell-values)
+         rows []]
+    (if (seq cell-values)
+      (let [row-cell-values (take (first layout) cell-values)
+            final-colspan (+ 1 (- max-width (count row-cell-values)))
+            row-values (map #(vector 1 %) row-cell-values)
+            row-values (if (> final-colspan 1)
+                         (concat (butlast row-values)
+                                 [[final-colspan (last (last row-values))]])
+                         row-values)]
+        (recur (rest layout)
+               max-width
+               (drop (first layout) cell-values)
+               (if (seq row-values)
+                 (conj rows
+                       (vec
+                        (concat [:tr]
+                                (vec
+                                 (map #(let [cell-value (last %)
+                                             cell-value (if (vector? cell-value)
+                                                          cell-value
+                                                          [cell-value])]
+                                         (vec
+                                          (if (> (first %) 1)
+                                            (concat [:td {:valign "top"
+                                                          :colspan (first %)}]
+                                                    cell-value)
+                                            (concat [:td {:valign "top"}]
+                                                    cell-value))))
+                                      row-values)))))
+                 rows)))
+      (vec (concat [:table] rows)))))
 
 (defmulti create-form-field-cell (fn [_ m] (:type m)))
 
@@ -564,29 +566,44 @@
        (form-layout-grid* form-name layout form-state coll)
        (form-layout-grid* form-name layout {:form-data init-data} coll))))
 
-(defn nil-or-empty-string? [v]
-  (or (not v)
-      (and (string? v)
-           (empty? v))))
+(defmulti template (fn [& args] (first args)))
 
-(defn clean-form-input
-  "Set empty values to nil and remove the id if it is nil."
-  [m]
-  (let [original-meta (meta m)]
-    (with-meta
-      (apply merge
-             (map #(hash-map (first %)
-                             (let [value (last %)]
-                               (if (nil-or-empty-string? value)
-                                 nil
-                                 value)))
-                  (if (not (nil-or-empty-string? (:id m)))
-                    m
-                    (dissoc m :id))))
-      original-meta)))
+(defmethod template :default [_ action options field-table]
+           (template :basic action options field-table))
+
+(defn form-header [form-title buttons]
+  [:div {:class "form-header"}
+   [:table
+    [:tr
+     [:td
+      [:span {:class "form-title"} form-title]]
+     [:td {:align "right"}
+      (display-buttons "header" buttons)]]]])
+
+(defn form-footer [buttons]
+  [:div {:class "form-footer"}
+   (display-buttons "footer" buttons)])
+
+(defmethod template :over-under [_
+                                 action
+                                 {:keys [buttons title attrs]}
+                                 field-table]
+           (let [title (or title "Your Title Goes Here")
+                 buttons (or buttons [[:submit] [:cancel]])]
+             [:div {:class "sandbar-form"}
+             (form-to [:post (cpath action) attrs]
+                      (form-header title buttons)
+                      field-table
+                      (form-footer buttons))]))
+
+(defmethod template :basic [_ action {:keys [buttons attrs]} field-div]
+           (let [buttons (or buttons [[:submit] [:reset]])]
+             [:div {:class "sandbar-form"}
+              (form-to [:post (cpath action) attrs]
+                       (append-buttons-to-table field-div buttons))]))
 
 ;;
-;; Macros to encapsulate common form patters
+;; Macros to encapsulate common 'form' patters
 ;;
 
 (defn form-routes [resource-uri add-form edit-form submit-fn]

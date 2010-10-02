@@ -1,2 +1,5 @@
 lein radagast sandbar.core-test \
-              sandbar.stateful-session-test
+              sandbar.stateful-session-test \
+              sandbar.util \
+              sandbar.validation \
+              sandbar.forms

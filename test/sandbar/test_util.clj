@@ -8,9 +8,18 @@
 
 (ns sandbar.test-util
   (:use (clojure test)
-        (sandbar util)))
+        (sandbar util
+                 [test :only (t)])))
  
 (deftest test-remove-file-ext
   (is (= (remove-file-ext "test.txt") "test"))
   (is (= (remove-file-ext "test.file.txt") "test.file"))
   (is (= (remove-file-ext "test") "test")))
+
+(deftest test-index-by
+  (t "index by"
+     (t "when you have two distinct maps in a collection"
+        (is (= (index-by :a [{:a "1" :b "A"}
+                             {:a "2" :b "B"}])
+               {"1" {:a "1" :b "A"}
+                "2" {:a "2" :b "B"}})))))
