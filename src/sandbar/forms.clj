@@ -885,7 +885,9 @@
                    form-data# (case type#
                                     :edit (let [id# (get-param params# :id)]
                                             (~load id#))
-                                    ~default-data)
+                                    (if (map? ~default-data)
+                                      ~default-data
+                                      (~default-data request#)))
                    form-type# (~type-fn-sym type#
                                             request#
                                             form-data#
