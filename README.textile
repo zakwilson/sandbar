@@ -12,14 +12,17 @@ You may also be interested in joining the "Sandbar Google Group":http://groups.g
 
 h2. Sessions
 
-Replace <code>wrap-session</code> with <code>wrap-stateful-session</code> and you can do this:
+Replace <code>wrap-session</code> with <code>wrap-stateful-session</code> and downstream from any wrapped handler you may access the session through a map interface.
 
 <pre>
 <code>
-(defn increment-counter []
-  (let [counter (+ 1 (session-get :counter 0))]
-    (do (session-put! :counter counter)
-        (str "Counter is now " counter))))
+(defn form-authentication [request]
+  (do (session-put! :auth-redirect-uri (:uri request))
+      (redirect "/login")))
+
+(defn get-auth-success-redirect []
+  (or (session-get :auth-redirect-uri)
+      (property-lookup adapter :login-page)))
 </code>
 </pre>
 
