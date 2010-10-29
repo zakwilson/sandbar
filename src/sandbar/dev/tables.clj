@@ -11,7 +11,8 @@
   (:use (ring.util [codec :only (url-encode)])
         (clojure.contrib [json :only (json-str)])
         (hiccup core page-helpers)
-        (sandbar core stateful-session)))
+        (sandbar core stateful-session))
+  (:require [clojure [string :as str]]))
 
 (declare *table-id*)
 
@@ -388,19 +389,19 @@ function removeFilter_" q "(column) {
 ;; Functions for adapting this table to carte backend
 ;;
 
-(defn remove-path-from-keyword [path k]
-  (keyword (subs (name k)
-                 (if (= path "") 0 (+ 1 (count path))))))
-
-(defn sorts-on-path [path sort]
-  (flatten
-   (filter #(= (.indexOf (name (last %)) ".") -1)
-           (map #(vector (first %)
-                          (remove-path-from-keyword path (last %)))
-                 (filter (if (= path "")
-                           #(= (.indexOf (name (last %)) ".") -1)
-                           #(.startsWith (name (last %)) (str path ".")))
-                         (partition 2 sort))))))
+(defn remove-path-from-keyword
+  ([k]
+     (keyword
+      (let [s (str/split (name k) #"[.]")]
+        (if (> (count s) 2)
+          (->> s
+               (drop (- (count s) 2))
+               (interpose ".")
+               (apply str))
+          k))))
+  ([path k]
+     (keyword (subs (name k)
+                    (if (= path "") 0 (+ 1 (count path)))))))
 
 (defn filters-on-path [path filters]
   (reduce (fn [a b]
@@ -423,38 +424,34 @@ function removeFilter_" q "(column) {
            "."
            n))))
 
+(defn carte-query-sort [sort]
+  (if (and sort
+           (not (empty? sort)))
+    (map #(let [[field dir] (reverse %)]
+            [(remove-path-from-keyword (keyword field)) dir])
+         (partition 2 sort))
+    nil))
+
 (defn carte-query
-  ([table filters sort]
+  ([table filters]
      (let [query [table]
-           query (if (empty? filters) query (conj query filters))
-           query (if (and sort
-                          (not (empty? sort)))
-                   (vec
-                    (concat query
-                            [:order-by]
-                            (map #(let [[field dir] (reverse %)]
-                                    [(keyword field) dir])
-                                 (partition 2 sort))))
-                   query)]
+           query (if (empty? filters) query (conj query filters))]
        query))
-  ([root-path table joins filters sort]
+  ([root-path table joins filters]
      (let [query (carte-query table
-                              (filters-on-path root-path filters)
-                              (sorts-on-path root-path sort))
+                              (filters-on-path root-path filters))
            join-queries (map #(if (coll? %)
                                 (carte-query (new-root-path root-path (first %))
                                              (first %)
                                              (rest %)
-                                             filters
-                                             sort)
+                                             filters)
                                 (let [p (new-root-path root-path %)]
                                   (carte-query %
-                                               (filters-on-path p filters)
-                                               (sorts-on-path p sort))))
+                                               (filters-on-path p filters))))
                              joins)]
        (if (not (empty? join-queries))
-             (concat query [:with] join-queries)
-             query))))
+         (concat query [:with] join-queries)
+         query))))
 
 (defn carte-table-adapter
   "Transform filter and sort information from a filter-and-sort table into
@@ -462,7 +459,11 @@ function removeFilter_" q "(column) {
   [table filters sort-and-page]
   (let [{:keys [sort page page-size]} sort-and-page
         tables (if (keyword? table) [table] table)
-        query (carte-query "" (first tables) (rest tables) filters sort)]
+        query (carte-query "" (first tables) (rest tables) filters)
+        order-by (carte-query-sort sort)
+        query (vec (if order-by
+                     (concat query [:order-by] order-by)
+                     query))]
     (if page-size
       (concat query [:page page page-size])
       query)))

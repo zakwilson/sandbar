@@ -26,7 +26,7 @@ Replace <code>wrap-session</code> with <code>wrap-stateful-session</code> and do
 </code>
 </pre>
 
-Flash is supported as well with <code>set-flash-value!</code> and <code>get-flash-value</code>.
+Flash is supported as well with <code>flash-put!</code> and <code>flash-get</code>.
 
 For more detailed documentation see the <a href="http://github.com/brentonashworth/sandbar/wiki/Stateful-Sessions">Stateful Sessions</a> page in the Sandbar Wiki.
 

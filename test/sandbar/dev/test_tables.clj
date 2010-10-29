@@ -210,18 +210,6 @@ function displayResults_test_table(data) {
   (is (= (js "test-table" "/ideas" :prototype)
          table-javascript)))
 
-(deftest test-sorts-on-path
-  (is (= (sorts-on-path "" [:asc :name :desc :person.name])
-         [:asc :name]))
-  (is (= (sorts-on-path "person" [:asc :name :desc :person.name])
-         [:desc :name]))
-  (is (= (sorts-on-path "person" [:asc :name :desc :person.name
-                                  :asc :person.mom.name])
-         [:desc :name]))
-  (is (= (sorts-on-path "person.mom" [:asc :name :desc :person.name
-                                      :asc :person.mom.name])
-         [:asc :name])))
-
 (deftest test-filters-on-path
   (is (= (filters-on-path "" {:name "A" :person.name "B"})
          {:name "A"}))
@@ -244,24 +232,26 @@ function displayResults_test_table(data) {
   (is (= (carte-table-adapter [:artist :albums]
                               {:name "Jim" :albums.title "Fun"}
                               {:sort [:asc :name] :page 10 :page-size 5})
-         [:artist {:name "Jim"} :order-by [:name :asc]
+         [:artist {:name "Jim"}
           :with [:albums {:title "Fun"}]
+          :order-by [:name :asc]
           :page 10 5]))
   (is (= (carte-table-adapter [:artist :albums]
                               {:name "Jim" :albums.title "Fun"}
                               {:sort [:asc :name :desc :albums.title]
                                :page 10 :page-size 5})
-         [:artist {:name "Jim"} :order-by [:name :asc]
-          :with [:albums {:title "Fun"} :order-by [:title :desc]]
+         [:artist {:name "Jim"}
+          :with [:albums {:title "Fun"}]
+          :order-by [:name :asc] [:albums.title :desc]
           :page 10 5]))
   (is (= (carte-table-adapter [:artist :albums :genre]
                               {:name "Jim" :albums.title "Fun"
                                :genre.name "Rock"}
                               {:sort [:asc :name :desc :albums.title]
                                :page 10 :page-size 5})
-         [:artist {:name "Jim"} :order-by [:name :asc]
-          :with [:albums {:title "Fun"} :order-by [:title :desc]]
-                [:genre {:name "Rock"}]
+         [:artist {:name "Jim"} 
+          :with [:albums {:title "Fun"}] [:genre {:name "Rock"}]
+          :order-by [:name :asc] [:albums.title :desc]
           :page 10 5]))
   (is (= (carte-table-adapter [:artist [:albums :genre]]
                               {:name "Jim" :albums.title "Fun"
@@ -269,9 +259,9 @@ function displayResults_test_table(data) {
                               {:sort [:asc :name :desc :albums.title
                                       :asc :albums.genre.name]
                                :page 10 :page-size 5})
-         [:artist {:name "Jim"} :order-by [:name :asc]
-          :with [:albums {:title "Fun"} :order-by [:title :desc]
-                 :with [:genre {:name "Rock"} :order-by [:name :asc]]]
+         [:artist {:name "Jim"} 
+          :with [:albums {:title "Fun"} :with [:genre {:name "Rock"}]]
+          :order-by [:name :asc] [:albums.title :desc] [:genre.name :asc]
           :page 10 5]))
   (is (= (carte-table-adapter [:artist [:albums :genre] :genre]
                               {:name "Jim" :albums.title "Fun"
@@ -279,10 +269,8 @@ function displayResults_test_table(data) {
                               {:sort [:asc :name :desc :albums.title
                                       :asc :albums.genre.name]
                                :page 10 :page-size 5})
-         [:artist {:name "Jim"} :order-by [:name :asc]
-          :with [:albums {:title "Fun"} :order-by [:title :desc]
-                 :with [:genre {:name "Rock"} :order-by [:name :asc]]]
+         [:artist {:name "Jim"} 
+          :with [:albums {:title "Fun"} :with [:genre {:name "Rock"}]]
                 [:genre {:name "Rock"}]
+          :order-by [:name :asc] [:albums.title :desc] [:genre.name :asc]
           :page 10 5])))
-
-
