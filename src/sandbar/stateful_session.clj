@@ -13,39 +13,70 @@
 (declare sandbar-session)
 (declare sandbar-flash)
 
+(defn- merge-session
+  ""
+  [request-s response-s incoming-ss outgoing-ss]
+  (cond (nil? outgoing-ss)
+        (cond (nil? response-s) nil
+              (= response-s :empty) request-s
+              :else response-s)
+        
+        (= outgoing-ss :empty)
+        (cond (nil? response-s) (when incoming-ss {::session incoming-ss})
+              (= response-s :empty) :empty
+              :else (if incoming-ss
+                      (assoc response-s ::session incoming-ss)
+                      response-s))
+        
+        :else
+        (cond (nil? response-s) {::session outgoing-ss}
+              (= response-s :empty)
+              (assoc request-s ::session outgoing-ss)
+              :else
+              (assoc response-s ::session outgoing-ss))))
+
+(defn- response-session
+  "Build the response session."
+  [request response incoming-ss outgoing-ss]
+  (let [outgoing-ss (cond (keyword? outgoing-ss) outgoing-ss
+                          (empty? outgoing-ss) nil
+                          :else outgoing-ss)
+        req-s (-> request
+                  :session
+                  (dissoc ::session))
+        res-s (if (contains? response :session)
+                (:session response)
+                :empty)]
+    (merge-session req-s res-s incoming-ss outgoing-ss)))
+
 (defn wrap-stateful-session*
   "Add stateful sessions to a ring handler. Does not modify the functional
    behavior of ring sessions except that returning nil will not remove
-   the session if you have stateful data. Creates a separate namespace
-   for stateful session keys so that user code and library code will not
-   interfere with one another. Also adds map style flash support backed by
-   Ring's flash middleware."
+   the session if if there is stateful data. Session data stored by this
+   middleware will be put into the session under the ::session key. Also adds
+   map style flash support backed by Ring's flash middleware."
   [handler]
   (fn [request]
     (binding [sandbar-session (atom (-> request :session ::session))
               sandbar-flash (atom {:incoming (-> request :flash)})]
-      (let [request (update-in request [:session] dissoc ::session)
+      (let [incoming-ss @sandbar-session
+            request (update-in request [:session] dissoc ::session)
             response (handler request)
-            sandbar-session @sandbar-session
             outgoing-flash (merge (:outgoing @sandbar-flash)
                                   (:flash response))
-            sandbar-session (if (empty? sandbar-session)
-                              nil
-                              sandbar-session)
-            request-session (dissoc (:session request) ::session)
-            response-session (:session response)
-            session  (if (contains? response :session)
-                       (or response-session {})
-                       request-session) 
-            session (if sandbar-session
-                      (assoc session ::session sandbar-session)
-                      session)]
+            outgoing-ss @sandbar-session
+            session (response-session request
+                                      response
+                                      incoming-ss
+                                      (if (= outgoing-ss incoming-ss)
+                                        :empty
+                                        outgoing-ss))]
         (when response
-          (let [response (if (nil? session)
-                           (dissoc response :session)
-                           (if (empty? session)
-                             (merge response {:session nil})
-                             (merge response {:session session})))]
+          (let [response (cond (= session :empty) response
+                               (empty? session)
+                               (assoc response :session nil)
+                               :else
+                               (assoc response :session session))]
             (if outgoing-flash
               (assoc response :flash outgoing-flash)
               response)))))))

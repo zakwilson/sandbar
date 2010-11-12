@@ -15,6 +15,120 @@
 
 (def session-key :sandbar.stateful-session/session)
 
+(deftest response-session-test
+  (let [tst #'sandbar.stateful-session/response-session]
+    (t "sandbar-session is nil"
+       (t "response session is nil"
+          (let [tst (fn [request-s incoming-ss]
+                      (tst request-s
+                           {:session nil}
+                           incoming-ss
+                           nil))]
+            (is (= (tst {:session {:a "a"}} {:x "x"}) nil))
+            (is (= (tst {:session {:a "a"}} nil) nil))
+            (is (= (tst {} {:x "x"}) nil))
+            (is (= (tst {} nil) nil))))
+       
+       (t "response session is empty"
+          (let [tst (fn [request-s incoming-ss]
+                      (tst request-s
+                           {}
+                           incoming-ss
+                           nil))]
+            (is (= (tst {:session {:a "a"}} {:x "x"}) {:a "a"}))
+            (is (= (tst {:session {:a "a"}} nil) {:a "a"}))
+            (is (= (tst {} {:x "x"}) nil))
+            (is (= (tst {} nil) nil))))
+
+       (t "response session exists"
+          (let [tst (fn [request-s incoming-ss]
+                      (tst request-s
+                           {:session {:b "b"}}
+                           incoming-ss
+                           nil))]
+            (is (= (tst {:session {:a "a"}} {:x "x"}) {:b "b"}))
+            (is (= (tst {:session {:a "a"}} nil) {:b "b"}))
+            (is (= (tst {} {:x "x"}) {:b "b"}))
+            (is (= (tst {} nil) {:b "b"})))))
+
+    (t "sandbar-session is empty"
+       (t "response session is null"
+          (let [tst (fn [request-s incoming-ss]
+                      (tst request-s
+                           {:session nil}
+                           incoming-ss
+                           :empty))]
+            (is (= (tst {:session {:a "a"}} {:x "x"}) {session-key {:x "x"}}))
+            (is (= (tst {:session {:a "a"}} nil) nil))
+            (is (= (tst {} {:x "x"}) {session-key {:x "x"}}))
+            (is (= (tst {} nil) nil))))
+       (t "response session is empty"
+          (let [tst (fn [request-s incoming-ss]
+                      (tst request-s
+                           {}
+                           incoming-ss
+                           :empty))]
+            (is (= (tst {:session {:a "a"}} {:x "x"}) :empty))
+            (is (= (tst {:session {:a "a"}} nil) :empty))
+            (is (= (tst {} {:x "x"}) :empty))
+            (is (= (tst {} nil) :empty))))
+       (t "response session exists"
+          (let [tst (fn [request-s incoming-ss]
+                      (tst request-s
+                           {:session {:b "b"}}
+                           incoming-ss
+                           :empty))]
+            (is (= (tst {:session {:a "a"}} {:x "x"})
+                   {:b "b" session-key {:x "x"}}))
+            (is (= (tst {:session {:a "a"}} nil) {:b "b"}))
+            (is (= (tst {} {:x "x"})
+                   {:b "b" session-key {:x "x"}}))
+            (is (= (tst {} nil) {:b "b"})))))
+    
+    (t "sandbar-session exists"
+       (t "response session is nil"
+          (let [tst (fn [request-s incoming-ss]
+                      (tst request-s
+                           {:session nil}
+                           incoming-ss
+                           {:y "y"}))]
+            (is (= (tst {:session {:a "a"}} {:x "x"})
+                   {session-key {:y "y"}}))
+            (is (= (tst {:session {:a "a"}} nil)
+                   {session-key {:y "y"}}))
+            (is (= (tst {} {:x "x"})
+                   {session-key {:y "y"}}))
+            (is (= (tst {} nil)
+                   {session-key {:y "y"}}))))
+       (t "response session is empty"
+          (let [tst (fn [request-s incoming-ss]
+                      (tst request-s
+                           {}
+                           incoming-ss
+                           {:y "y"}))]
+            (is (= (tst {:session {:a "a"}} {:x "x"})
+                   {:a "a" session-key {:y "y"}}))
+            (is (= (tst {:session {:a "a"}} nil)
+                   {:a "a" session-key {:y "y"}}))
+            (is (= (tst {} {:x "x"})
+                   {session-key {:y "y"}}))
+            (is (= (tst {} nil)
+                   {session-key {:y "y"}}))))
+       (t "response session is exists"
+          (let [tst (fn [request-s incoming-ss]
+                      (tst request-s
+                           {:session {:b "b"}}
+                           incoming-ss
+                           {:y "y"}))]
+            (is (= (tst {:session {:a "a"}} {:x "x"})
+                   {:b "b" session-key {:y "y"}}))
+            (is (= (tst {:session {:a "a"}} nil)
+                   {:b "b" session-key {:y "y"}}))
+            (is (= (tst {} {:x "x"})
+                   {:b "b" session-key {:y "y"}}))
+            (is (= (tst {} nil)
+                   {:b "b" session-key {:y "y"}})))))))
+
 (deftest wrap-stateful-session*-test
   (t "stateful session"
      (t "input empty, session in response"
@@ -65,10 +179,14 @@
                              {:session {:b "b"}})))
                 {:session {:c "c"}})
                {:session {session-key {:a "a"} :b "b"}})))
-     (t "input contains values, return empty DOES NOT remove values"
+     (t "if session is not changed then do not include :session in response"
         (is (= ((wrap-stateful-session* (fn [r] {}))
                 {:session {:a "a"}})
-               {:session {:a "a"}})))
+               {})))
+     (t "if session is not changed then do not include :session in response"
+        (is (= ((wrap-stateful-session* (fn [r] {}))
+                {:session {:a "a" session-key {:b "b"}}})
+               {})))
      (t "input contains values, return session nil removes values"
         (is (= ((wrap-stateful-session* (fn [r] {:session nil}))
                 {:session {:a "a"}})
@@ -82,7 +200,7 @@
                  (fn [r] (do (session-delete-key! :a)
                              {})))
                 {:session {:a "a"}})
-               {:session {:a "a"}})))
+               {})))
      (t "session-delete-key! does remove values from sandbar-session"
         (is (= ((wrap-stateful-session*
                  (fn [r] (do (session-delete-key! :a)
@@ -108,6 +226,12 @@
                              {})))
                 {:session {session-key {:a "a" :b "b"}}})
                {:session nil})))
+     (t "destroy-session! only deletes things in the sandbar session"
+        (is (= ((wrap-stateful-session*
+                 (fn [r] (do (destroy-session!)
+                             {})))
+                {:session {session-key {:a "a" :b "b"} :c "c"}})
+               {:session {:c "c"}})))
      (t "destroy-session! works when combined with wrap-flash"
         (is (= ((wrap-stateful-session*
                  (ring.middleware.flash/wrap-flash
