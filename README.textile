@@ -127,7 +127,7 @@ h2. Using Sandbar in your project
 
 h3. Leiningen
 
-Add <code>[sandbar/sandbar "0.3.0-SNAPSHOT"]</code> to your :dependencies in project.clj.
+Add <code>[sandbar/sandbar "0.3.0"]</code> to your :dependencies in project.clj.
 
 h3. Maven
 
@@ -136,7 +136,7 @@ Add the following dependency:
 <pre><code><dependency>
   <groupId>sandbar</groupId>
   <artifactId>sandbar</artifactId>
-  <version>0.3.0-SNAPSHOT</version>
+  <version>0.3.0</version>
 </dependency></code></pre>
 
 which comes from Clojars...
