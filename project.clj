@@ -1,6 +1,7 @@
-(defproject sandbar/sandbar "0.3.0-SNAPSHOT"
+(defproject sandbar/sandbar "0.3.0"
   :description "Clojure web application libraries built on top of Ring
                 and Compojure."
+  :url "http://github.com/brentonashworth/sandbar"
   :dependencies [[org.clojure/clojure "1.2.0"]
                  [org.clojure/clojure-contrib "1.2.0"]
                  [ring/ring-core "0.3.1"]
