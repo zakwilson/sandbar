@@ -72,6 +72,19 @@
                     (dissoc m :id))))
       original-meta)))
 
+(defn replace-params
+  "Replace all routes params by values contained in the given params map."
+  [m s]
+  (reduce #(string/replace-first %1
+                                 (str ":" (first %2))
+                                 (second %2))
+          s m))
+
+(defn keyword-keys
+  "Takes a map with string keys and makes them keywords."
+  [m]
+  (into {} (map #(vector (keyword (first %)) (second %)) m)))
+
 ;;
 ;; Form Elements
 ;;
@@ -854,34 +867,39 @@
                       (~title type#))
            (defmethod ~get-buttons :default [form-type#]
                       ~buttons)
-           (defmethod ~get-post :default [form-type#]
-                      ~uri)
+           (defmethod ~get-post :default [form-type# uri#]
+                      uri#)
            (defn ~submit [request# default-type#]
              (let [params# (:params request#)
+                   route-params# (:route-params request#)
                    uri# (:uri request#)
                    form-type# (~type-fn-sym :marshal request# {} default-type#)
                    {cancel-val# :cancel and-new-val# :save-and-new}
                    (special-button-text (~get-buttons form-type#))]
                (redirect
-                (if (form-cancelled? params# cancel-val#)
-                  ~on-cancel
-                  (let [form-data# (~marshal form-type# params#)
-                        failure# (get (:headers request#) "referer")
-                        submit# (get-param params# :submit)
-                        form-type# (~type-fn-sym :validate
-                                                 request#
-                                                 form-data#
-                                                 default-type#)]
-                    (if-valid (~get-validator form-type#) form-data#
-                              (fn [m#]
-                                (let [s# (~on-success m#)]
-                                  (if (and and-new-val# (= submit# and-new-val#))
-                                    uri#
-                                    s#)))
-                              (store-errors-and-redirect ~resource-id
-                                                         failure#)))))))
+                (replace-params
+                 route-params#
+                 (if (form-cancelled? params# cancel-val#)
+                   ~on-cancel
+                   (let [form-data# (merge (keyword-keys route-params#)
+                                           (~marshal form-type# params#))
+                         failure# (get (:headers request#) "referer")
+                         submit# (get-param params# :submit)
+                         form-type# (~type-fn-sym :validate
+                                                  request#
+                                                  form-data#
+                                                  default-type#)]
+                     (if-valid (~get-validator form-type#) form-data#
+                               (fn [m#]
+                                 (let [s# (~on-success m#)]
+                                   (if (and and-new-val# (= submit# and-new-val#))
+                                     uri#
+                                     s#)))
+                               (store-errors-and-redirect ~resource-id
+                                                          failure#))))))))
            (defn ~view [type# request# default-type#]
              (let [params# (:params request#)
+                   route-params# (:route-params request#)
                    form-data# (case type#
                                     :edit (let [id# (get-param params# :id)]
                                             (~load id#))
@@ -893,7 +911,7 @@
                                             form-data#
                                             default-type#)]
                (template ~style
-                         (~get-post form-type#)
+                         (~get-post form-type# (replace-params route-params# ~uri))
                          {:title (~get-title form-type# type#)
                           :buttons (~get-buttons form-type#)
                           :attrs ~attrs}
@@ -908,8 +926,8 @@
                                                    type-fn-sym
                                                    marshal
                                                    get-validator)])
-                forms)
-        forms (let [base-args [resource uri view submit resource-id]
+                forms) 
+       forms (let [base-args [resource uri view submit resource-id]
                     ajax-args (if-let [ajax-validation-uri
                                        (:ajax-validation-at options)]
                                 {:validator [ajax-validator
