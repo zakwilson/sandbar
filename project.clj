@@ -1,4 +1,4 @@
-(defproject sandbar/sandbar "0.3.0"
+(defproject sandbar/sandbar "0.4.0-SNAPSHOT"
   :description "Clojure web application libraries built on top of Ring
                 and Compojure."
   :url "http://github.com/brentonashworth/sandbar"
@@ -13,9 +13,9 @@
                      [ring/ring-jetty-adapter "0.3.1"]
                      [ring/ring-httpcore-adapter "0.3.1"]
                      [mysql/mysql-connector-java "5.1.6"]
-                     [carte/carte "0.2.0-SNAPSHOT"]
+                     [carte/carte "0.2.0"]
                      [deview/lein-deview "1.2.0-SNAPSHOT"]
-                     [lein-difftest "1.3.1"]
+                     [lein-difftest "1.3.2-SNAPSHOT"]
                      [enlive "1.0.0-SNAPSHOT"]
                      [radagast "1.0.0"]]
   :hooks [leiningen.hooks.difftest]
