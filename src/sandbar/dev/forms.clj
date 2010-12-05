@@ -8,7 +8,8 @@
 
 (ns sandbar.dev.forms
   "Forms and form layouts."
-  (:use [ring.util.response :only [redirect]]
+  (:use [clojure.contrib.def :only [name-with-attributes]]
+        [ring.util.response :only [redirect]]
         [compojure.core :only [routes GET POST]]
         [sandbar.stateful-session :only [flash-put!
                                          flash-get]]
@@ -765,3 +766,9 @@
        :body (case request-method
                    :post (post-form request name validator options)
                    (get-form request name form-data validator options))})))
+
+(defmacro defform [name & options]
+  "Define a form handler function. The name may be optionally be
+  followed by a doc-string and metadata map."
+  (let [[name options] (name-with-attributes name options)]
+    `(def ~name (make-form ~(keyword name) ~@options))))
