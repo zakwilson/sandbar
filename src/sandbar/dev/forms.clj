@@ -695,9 +695,6 @@
         buttons (if buttons
                   {:buttons buttons}
                   {:buttons [[:submit] [:cancel]]})
-        title (cond (string? title) title
-                    (fn? title) (title request form-data)
-                    :else nil)
         attrs (merge buttons
                      (when title {:title title}))
         layout (or layout [1])
@@ -756,13 +753,15 @@
     (GET \"/simple/form/:id\" request (simple-form request))
     (GET \"/simple/form\" request (simple-form request))
     (POST \"/simple/form*\" request (simple-form request)))"
-  [name & {:keys [validator] :as options}]
-  (fn [request & form-data]
+  [name & {:keys [validator title] :as options}]
+  (fn [request & [form-data]]
     (let [{:keys [request-method]} request
+          title (cond (string? title) title
+                      (fn? title) (title request form-data)
+                      :else nil)
+          options (assoc options :title title)
           validator (or validator identity)]
-      (case request-method
-            :post (post-form request name validator options)
-            (get-form request name
-                      (when form-data (first form-data))
-                      validator
-                      options)))))
+      {:title title
+       :body (case request-method
+                   :post (post-form request name validator options)
+                   (get-form request name form-data validator options))})))
