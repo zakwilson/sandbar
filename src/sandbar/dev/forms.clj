@@ -73,6 +73,14 @@
                     (dissoc m :id))))
       original-meta)))
 
+(defn replace-params
+  "Replace all routes params by values contained in the given params map."
+  [m s]
+  (reduce #(string/replace-first %1
+                                 (str ":" (first %2))
+                                 (second %2))
+          s m))
+
 ;;
 ;; Form Elements
 ;;
@@ -595,8 +603,8 @@
 
 (defmulti template (fn [& args] (first args)))
 
-(defmethod template :default [_ action options field-table]
-           (template :basic action options field-table))
+(defmethod template :default [_ method action options field-table]
+           (template :basic method action options field-table))
 
 (defn form-header [form-title buttons]
   [:div {:class "form-header"}
@@ -612,21 +620,22 @@
    (display-buttons "footer" buttons)])
 
 (defmethod template :over-under [_
+                                 method
                                  action
                                  {:keys [buttons title attrs]}
                                  field-table]
            (let [title (or title "Your Title Goes Here")
                  buttons (or buttons [[:submit] [:cancel]])]
              [:div {:class "sandbar-form"}
-             (form-to [:post (cpath action) attrs]
+             (form-to [method (cpath action) attrs]
                       (form-header title buttons)
                       field-table
                       (form-footer buttons))]))
 
-(defmethod template :basic [_ action {:keys [buttons attrs]} field-div]
+(defmethod template :basic [_ method action {:keys [buttons attrs]} field-div]
            (let [buttons (or buttons [[:submit] [:reset]])]
              [:div {:class "sandbar-form"}
-              (form-to [:post (cpath action) attrs]
+              (form-to [method (cpath action) attrs]
                        (append-buttons-to-table field-div buttons))]))
 
 (defn- build-marshal-function
@@ -681,7 +690,8 @@
 (defn- get-form
   "Handle a form get request."
   [request name form-data validator options]
-  (let [{:keys [load defaults buttons title layout fields style properties]}
+  (let [{:keys [load defaults buttons title layout fields style properties
+                create-method update-method create-action update-action]}
         options
         {:keys [params uri]} request
         properties (or properties {})
@@ -704,9 +714,17 @@
         fields (-> (cond (vector? fields) fields
                          (fn? fields) (fields request form-data))
                    (set-required validator))
-        style (or style :default)]
+        style (or style :default)
+        route-params (:route-params request)]
     (template style
-              uri
+              (cond (and id update-method) update-method
+                    create-method create-method
+                    :else :post)
+              (cond (and id update-action) (replace-params route-params
+                                                           update-action)
+                    create-action (replace-params route-params
+                                                  create-action)
+                    :else uri)
               attrs
               (form-layout-grid layout
                                 name
@@ -763,11 +781,14 @@
                       (fn? title) (title request form-data)
                       :else nil)
           options (assoc options :title title)
-          validator (or validator identity)]
-      {:title title
-       :body (case request-method
-                   :post (post-form request name validator options)
-                   (get-form request name form-data validator options))})))
+          validator (or validator identity)
+          response (if (some #{request-method} [:post :put])
+                     (post-form request name validator options)
+                     (get-form request name form-data validator options))]
+      (if (map? response)
+        response
+        {:title title
+         :body response}))))
 
 (defmacro defform [name & options]
   "Define a form handler function. The name may be optionally be
