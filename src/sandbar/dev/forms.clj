@@ -87,11 +87,13 @@
     [:div {:class "field-label"} title
      (if (= req :required) [:span {:class "required"} "*"] "")]))
 
-(defn hidden [fname]
-  {:type :hidden
-   :label ""
-   :field-name fname
-   :html [:input {:type "hidden" :name (name fname) :value ""}]})
+(defn hidden
+  ([fname] (hidden fname nil))
+  ([fname value]
+     {:type :hidden
+      :label ""
+      :field-name fname
+      :html [:input {:type "hidden" :name (name fname) :value value}]}))
 
 #_(defn textarea
   ([title fname] (textarea title fname {} :optional))
@@ -232,7 +234,7 @@
     (-> (if (contains? #{:get :post} method)
           [:form (merge {:method method-str, :action action} attrs)]
           [:form (merge {:method "POST", :action action} attrs)
-           (hidden (str "_method") method-str)])
+           (:html (hidden (str "_method") method-str))])
         (concat body)
         (vec))))
 
