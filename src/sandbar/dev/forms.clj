@@ -790,7 +790,8 @@
                          (fn? defaults) (defaults request)
                          :else {})
                    {})
-        id (get (:route-params request) "id")
+        route-params (:route-params request)
+        id (get route-params "id")
         form-data (cond id (or form-data (load id))
                         defaults defaults
                         :else {})
@@ -805,17 +806,20 @@
                    (set-required validator)
                    (actualize-html request properties))
         style (or style :default)
-        route-params (:route-params request)]
-    (template style
-              (cond (and id update-method) update-method
-                    create-method create-method
-                    :else :post)
-              (cond (and id update-action) (replace-params route-params
-                                                           update-action)
-                    create-action (replace-params route-params
-                                                  create-action)
-                    :else uri)
-              attrs
+        update-action (if (fn? update-action)
+                        (update-action request)
+                        update-action)
+        create-action (if (fn? create-action)
+                        (create-action request)
+                        create-action)
+        method (cond (and id update-method) update-method
+                     create-method create-method
+                     :else :post)
+        action (replace-params route-params
+                (cond (and id update-action) update-action
+                      create-action create-action
+                      :else uri))]
+    (template style method action attrs
               (form-layout-grid layout
                                 name
                                 fields
