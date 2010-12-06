@@ -67,9 +67,6 @@
       (forms/get-multi-select params :languages (db/all-langs) :id)
       forms/clean-form-input))
 
-;; Add a bindings option that can be used with multi-checkbox, select
-;; and multi-select.
-
 (defform user-form
   "Form for managing users."
   ;; don't know if passing the form-data is such a good idea when
@@ -80,10 +77,10 @@
            (textfield :last-name)
            (textfield :email)
            (checkbox :account-enabled)
-           #_(forms/multi-checkbox properties
-                                   :roles
-                                   (db/all-roles)
-                                   identity)
+           (multi-checkbox :roles
+                           :source (db/all-roles)
+                           :value name
+                           :visible name)
            (select :region
                    :source (db/all-regions)
                    :prompt {"" "Select a Region"}
@@ -95,8 +92,6 @@
                                  {:id :name})
            (textarea :notes :rows 5 :cols 80)]
   :buttons [[:save] [:cancel]]
-  ;; the load function should be a function of the params so that
-  ;; you don't have to depend on :id being there.
   :load #(db/fetch %)
   ;; marshal will be passed a function that can wrap the generated
   ;; marshal function.
@@ -114,8 +109,10 @@
   :title (fn [request] (if (get (-> request :params) "id")
                          "Edit User"
                          "Create User"))
-  :layout [1 1 2 1 1 1 2 1]
-  :defaults {:email "unknown"
+  :layout [1 1 2 1 1 1]
+  ;; defaults will need to specified in terms of the forms
+  ;; representation not the external data
+  #_:defaults #_{:email "unknown"
              :roles [:user]
              :account-enabled "Y"
              :languages [{:id 1 :name "Clojure"}]}

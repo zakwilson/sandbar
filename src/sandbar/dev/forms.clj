@@ -166,6 +166,13 @@
             :html [:textarea (merge {:name (name field-name)} options)]}
       :required (true? required))))
 
+(defn- checkbox-label-fn [field-name title class-name]
+  (fn [t]
+    [:span {:class class-name} (or title
+                                   (if (map? t)
+                                     (get t field-name field-name)
+                                     t))]))
+
 (defn checkbox
   "Create a form checkbox. The first argument is the field name. The named
   argument title is optional. Any other named arguments will be added to the
@@ -178,11 +185,7 @@
   (checkbox :elated :title \"Elated\" :id :elated)"
   [field-name & {:keys [title] :as options}]
   {:type :checkbox
-   :label (fn [t]
-            [:span {:class "field-label"} (or title
-                                              (if (map? t)
-                                                (get t field-name field-name)
-                                                t))])
+   :label (checkbox-label-fn field-name title "field-label")
    :field-name field-name
    :html [:input
           (merge {:type "checkbox"
@@ -190,8 +193,12 @@
                   :value "checkbox-true"} options)]
    :required false})
 
-(defn- select-options [coll key-key value-key]
-  (map #(vector :option {:value  (key-key %)} (value-key %)) coll))
+(defn- select-options [coll key-fn value-fn props]
+  (let [value-fn (fn [m]
+                   (let [v (value-fn m)]
+                     (get props v (name v))))]
+    (map #(vector :option {:value  (key-fn %)} (value-fn %))
+        coll)))
 
 (defn select
   "Create a form select element. The first argument is the field name. The
@@ -199,11 +206,11 @@
 
   source: The data source for select options. May be either a literal vector
           or a function of the request which returns a sequence. Defaults to
-          [{:id \"yes\" :name \"Yes\"} {:id \"no\" :name \"No\"}]
+          [:yes :no]
   value:  A function which will be applied to each element in the source list
-          to obtain its value. Defaults to :id.
+          to obtain its value. Defaults to name.
   visible: A function which will be applied to each element in the source list
-           to obtain the visible name of each option.
+           to obtain the visible name of each option. Defaults to identity.
 
   Other optional named arguments are title, prompt and required:
 
@@ -218,9 +225,9 @@
                  :as options}]
   (let [options (dissoc options :source :prompt :value :visible :required)
         source (or source
-                   [{:id "yes" :name "Yes"} {:id "no" :name "No"}])
-        value (or value :id)
-        visible (or visible :name)
+                   [:yes :no])
+        value (or value name)
+        visible (or visible identity)
         prompt (first prompt)
         select-html [:select (merge {:name (name field-name)} options)]
         select-html (if prompt
@@ -229,7 +236,7 @@
                                 {:value (key prompt)} (val prompt)]])
                       select-html)
         html-function
-        (fn [request]
+        (fn [request properties]
           (vec
            (concat
             select-html
@@ -237,7 +244,8 @@
                               (source request)
                               source)
                             value
-                            visible))))]
+                            visible
+                            properties))))]
     (assoc {:type :select
             :label (fn [t r]
                      (field-label (or title t) field-name r))
@@ -250,24 +258,26 @@
   [:div {:class "group"}
      (map #(vector :div {:class "group-checkbox"} %) coll)])
 
-#_(defn multi-checkbox
-  ([props many-spec]
-     (multi-checkbox props
-                     (:alias many-spec)
-                     ((:all-items many-spec))
-                     (:name-fn many-spec)))
-  ([props fname coll value-fn]
-     {:type :multi-checkbox
-      :label [:span {:class "group-title"} (property-lookup props fname)]
-      :field-name fname
-      :html (wrap-checkboxes-in-group
+(defn multi-checkbox
+  "Create a form multi-checkbox, which is a group of checkboxes."
+  [field-name & {:keys [title source value visible] :as options}]
+  (let [source (or source [:red :blue :green])
+        value-fn (or value name)
+        visible-fn (or visible identity)]
+    {:type :multi-checkbox
+     :label (checkbox-label-fn field-name title "group-title")
+     :field-name field-name
+     :html (fn [request properties]
+             (wrap-checkboxes-in-group
               (map
-               #(let [value (value-fn %)]
+               #(let [value (value-fn %)
+                      visible (visible-fn %)]
                   [:input
-                   {:type "checkbox" :name fname :value value}
-                   (property-lookup props (keyword value))])
-               coll))
-      :value-fn value-fn}))
+                   {:type "checkbox" :name field-name :value value}
+                   (property-lookup properties (keyword visible))])
+               (if (fn? source)
+                 (source request)
+                 source))))}))
 
 #_(defn multi-select [title fname coll kv & optional]
   (let [kv (dissoc kv :prompt)
@@ -384,41 +394,46 @@
 ;; Marshal and Binding data
 ;;
 
-(defn get-yes-no-fields
+(defn checkbox->boolean
   "Get Y or N values for all keys in cb-set. These keys represent checkboxes
    which must have either Y or N value. If the checkbox is not present then
    is was not selected and is a N."
-  [m params cb-set]
+  [m params key-set]
   (let [new-map (reduce
                  (fn [a b]
                    (let [k (key b)
                          k (if (keyword? k) k (keyword k))]
-                     (if (and (contains? cb-set k)
+                     (if (and (contains? key-set k)
                               (= "checkbox-true" (val b)))
-                       (assoc a k "Y")
+                       (assoc a k true)
                        a)))
                  m
                  params)]
-    (reduce (fn [a b] (if (b a) a (assoc a b "N")))
+    (reduce (fn [a b] (if (b a) a (assoc a b false)))
             new-map
-            cb-set)))
+            key-set)))
 
-(defn get-multi-checkbox
-  "Add the key k to the map m where the value of k is is a vector of
-   selected values."
-  [m params k all-values name-fn]
-  (let [v (get-param params k)
-        selected-values (set (filter-nil-vec (if (or (number? v)
-                                                     (string? v)) [v] v)))
-        selected (filter #(contains? selected-values (name-fn %)) all-values)]
-    (assoc m k selected)))
+(defn add-missing-multi-checkboxes
+  "Insure that there is a key for each multi-checkbox. Add an empty list for
+  any multi-checkbox that is missing from the params."
+  [m params key-set]
+  (reduce (fn [form-data next-multi]
+            (let [values (next-multi form-data)
+                  values (cond (sequential? values)
+                               (vec values)
+                               (not (nil? values))
+                               [values]
+                               :else [])]
+              (assoc form-data next-multi values)))
+          m
+          key-set))
 
 (defn get-multi-select
   "Add the key k to the map m where the value of k is a vector of
    selected values."
   [m params k all-values name-fn & more]
   (let [name-fn (if (map? name-fn) (key (first name-fn)) name-fn)]
-    (get-multi-checkbox m params k all-values name-fn)))
+    (add-missing-multi-checkboxes m params k all-values name-fn)))
 
 (defn- set-form-field-value* [form-state input-field update-fn]
   (let [field-name (:field-name input-field)
@@ -456,10 +471,11 @@
    form-state
    input-field
    (fn [previous-value html]
-     (assoc input-field :html
-            (vector :input (if (= previous-value "Y")
-                             (assoc (last html) :checked "true")
-                             (last html)))))))
+     (let [truthy #{"Y" "y" "yes" :yes true}]
+       (assoc input-field :html
+             (vector :input (if (contains? truthy previous-value)
+                              (assoc (last html) :checked "true")
+                              (last html))))))))
 
 (defmethod set-form-field-value :textarea [form-state input-field]
   (set-form-field-value*
@@ -473,7 +489,7 @@
         input-html (:html input-field)
         previous-val ((keyword field-name) (:form-data form-state))
         values (if (coll? previous-val)
-                 (map #((:value-fn input-field) %) previous-val)
+                 previous-val
                  [previous-val])]
     (if (seq values)
       (assoc input-field :html
@@ -491,17 +507,16 @@
       input-field)))
 
 (defmethod set-form-field-value :multi-checkbox [form-state input-field]
-  (let [title (:label input-field)
-        checkboxes (map last (last (:html input-field)))
+  (let [checkboxes (map last (last (:html input-field)))
         field-name (:field-name input-field)
         field-value (field-name (:form-data form-state))
-        value-set (set (map #((:value-fn input-field) %) field-value))
+        value-set (set field-value)
         new-checkboxes (map #(vector :input
                                      (let [attrs (second %)]
                                        (if (contains? value-set
-                                                     (:value attrs))
-                                        (assoc attrs :checked "true")
-                                        attrs))
+                                                      (:value attrs))
+                                         (assoc attrs :checked "true")
+                                         attrs))
                                      (last %))
                             checkboxes)]
     (assoc input-field :html
@@ -567,11 +582,12 @@
        field-row]
       field-row)))
 
-#_(defmethod create-form-field-cell :multi-checkbox [form-state m props]
+(defmethod create-form-field-cell :multi-checkbox [form-state m props]
   (let [{:keys [_ label field-name html]} m
         error-message (first (field-name form-state))
         field-row (filter-nil-vec
-                   (:html (set-form-field-value form-state m)))]
+                   (:html (set-form-field-value form-state m)))
+        label (label props)]
     (if error-message
       [:div
        [:div.error-message error-message]
@@ -599,7 +615,12 @@
 
 (defmethod create-hidden-field :checkbox [form-state m]
            [:input {:type "hidden"
-                    :name "__checkboxes"
+                    :name "_checkboxes"
+                    :value (:field-name m)}])
+
+(defmethod create-hidden-field :multi-checkbox [form-state m]
+           [:input {:type "hidden"
+                    :name "_multi-checkboxes"
                     :value (:field-name m)}])
 
 (def one-column-layout (repeat 1))
@@ -627,8 +648,8 @@
                           (filter #(not (= (:type %) :hidden)) coll))))]
     (vec (concat the-form
                  (map #(create-hidden-field form-state %)
-                      (filter #(or (= (:type %) :hidden)
-                                   (= (:type %) :checkbox)) coll))))))
+                      (let [hidden-types #{:hidden :checkbox :multi-checkbox}]
+                        (filter #(contains? hidden-types (:type %)) coll)))))))
 
 (defn form-layout-grid
   ([form-name coll request]
@@ -682,17 +703,32 @@
   []
   (fn [params]
     (let [keys (map keyword (keys params))
-          checkboxes (get-param params :__checkboxes)
+          marshal (fn [m] (dissoc m :submit :* :_method))
+          ;; Get checkboxes
+          checkboxes (get-param params :_checkboxes)
           checkboxes (when checkboxes
                        (set (map keyword (if (sequential? checkboxes)
                                            checkboxes
                                            [checkboxes]))))
-          marshal (fn [m] (dissoc m :submit :*))
           marshal (if checkboxes
                     (fn [m] (-> m
                                 marshal
-                                (dissoc :__checkboxes)
-                                (get-yes-no-fields params checkboxes)))
+                                (dissoc :_checkboxes)
+                                (checkbox->boolean params checkboxes)))
+                    
+                    marshal)
+          ;; Get multi-checkboxes
+          multi-cb (get-param params :_multi-checkboxes)
+          multi-cb (when multi-cb
+                     (set (map keyword (if (sequential? multi-cb)
+                                         multi-cb
+                                         [multi-cb]))))
+          marshal (if multi-cb
+                    (fn [m] (-> m
+                                marshal
+                                (dissoc :_multi-checkboxes)
+                                (add-missing-multi-checkboxes params
+                                                              multi-cb)))
                     
                     marshal)]
       (-> (get-params keys params)
@@ -713,6 +749,7 @@
        on-cancel
        (let [form-data (marshal params)
              failure (get (-> request :headers) "referer")]
+         (println "marshaled form-data:" (str form-data))
          (if-valid validator form-data
                    on-success
                    (store-errors-and-redirect name failure)))))))
@@ -731,10 +768,10 @@
   function of the request which generates that structure. This function will
   ensure that all such functions have been called and that all html values
   are generated."
-  [fields request]
+  [fields request properties]
   (vec (map #(let [html (:html %)
                    html (if (fn? html)
-                          (html request)
+                          (html request properties)
                           html)]
                (assoc % :html html))
             fields)))
@@ -766,7 +803,7 @@
         fields (-> (cond (vector? fields) fields
                          (fn? fields) (fields request form-data))
                    (set-required validator)
-                   (actualize-html request))
+                   (actualize-html request properties))
         style (or style :default)
         route-params (:route-params request)]
     (template style
