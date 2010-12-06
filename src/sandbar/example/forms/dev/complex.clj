@@ -91,7 +91,7 @@
                                  :languages
                                  (db/all-langs)
                                  {:id :name})
-           #_(forms/textarea properties :notes {:rows 5 :cols 80})]
+           (textarea :notes :rows 5 :cols 80)]
   :buttons [[:save] [:cancel]]
   ;; the load function should be a function of the params so that
   ;; you don't have to depend on :id being there.

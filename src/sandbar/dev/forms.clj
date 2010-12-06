@@ -103,14 +103,25 @@
       :field-name fname
       :html [:input {:type "hidden" :name (name fname) :value value}]}))
 
-#_(defn textarea
-  ([title fname] (textarea title fname {} :optional))
-  ([title fname options] (textarea title fname options :optional))
-  ([title fname options req]
-     {:type :textarea
-      :label (field-label title fname req)
-      :field-name fname
-      :html [:textarea (merge {:name (name fname)} options)]}))
+(defn textarea
+  "Create a form textarea. First argument is the field name. Optional named
+  arguments are title and required. Any other arguments will be added to the
+  field's html attributes.
+
+  Examples:
+
+  (textarea :notes)
+  (textarea :nates :title \"Notes\")
+  (textarea :notes :title \"Notes\" :required true)
+  (textarea :notes :rows 5 :cols 80)"
+  [field-name & {:keys [title required] :as options}]
+  (let [options (dissoc options :title :required)]
+    (assoc {:type :textarea
+            :label (fn [t r]
+                     (field-label (or title t) field-name r))
+            :field-name field-name
+            :html [:textarea (merge {:name (name field-name)} options)]}
+      :required (true? required))))
 
 #_(defn htmlfield
   ([fname content]
