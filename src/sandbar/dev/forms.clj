@@ -103,26 +103,6 @@
       :field-name fname
       :html [:input {:type "hidden" :name (name fname) :value value}]}))
 
-(defn textarea
-  "Create a form textarea. First argument is the field name. Optional named
-  arguments are title and required. Any other arguments will be added to the
-  field's html attributes.
-
-  Examples:
-
-  (textarea :notes)
-  (textarea :nates :title \"Notes\")
-  (textarea :notes :title \"Notes\" :required true)
-  (textarea :notes :rows 5 :cols 80)"
-  [field-name & {:keys [title required] :as options}]
-  (let [options (dissoc options :title :required)]
-    (assoc {:type :textarea
-            :label (fn [t r]
-                     (field-label (or title t) field-name r))
-            :field-name field-name
-            :html [:textarea (merge {:name (name field-name)} options)]}
-      :required (true? required))))
-
 #_(defn htmlfield
   ([fname content]
      (htmlfield nil content {:id fname}))
@@ -166,6 +146,26 @@
         (assoc :html [:input (merge (last (:html textfield))
                                     {:type "Password"})]))))
 
+(defn textarea
+  "Create a form textarea. First argument is the field name. Optional named
+  arguments are title and required. Any other arguments will be added to the
+  field's html attributes.
+
+  Examples:
+
+  (textarea :notes)
+  (textarea :nates :title \"Notes\")
+  (textarea :notes :title \"Notes\" :required true)
+  (textarea :notes :rows 5 :cols 80)"
+  [field-name & {:keys [title required] :as options}]
+  (let [options (dissoc options :title :required)]
+    (assoc {:type :textarea
+            :label (fn [t r]
+                     (field-label (or title t) field-name r))
+            :field-name field-name
+            :html [:textarea (merge {:name (name field-name)} options)]}
+      :required (true? required))))
+
 (defn checkbox
   "Create a form checkbox. The first argument is the field name. The named
   argument title is optional. Any other named arguments will be added to the
@@ -190,6 +190,62 @@
                   :value "checkbox-true"} options)]
    :required false})
 
+(defn- select-options [coll key-key value-key]
+  (map #(vector :option {:value  (key-key %)} (value-key %)) coll))
+
+(defn select
+  "Create a form select element. The first argument is the field name. The
+  named arguments source value and visible are usually required:
+
+  source: The data source for select options. May be either a literal vector
+          or a function of the request which returns a sequence. Defaults to
+          [{:id \"yes\" :name \"Yes\"} {:id \"no\" :name \"No\"}]
+  value:  A function which will be applied to each element in the source list
+          to obtain its value. Defaults to :id.
+  visible: A function which will be applied to each element in the source list
+           to obtain the visible name of each option.
+
+  Other optional named arguments are title, prompt and required:
+
+  title: The title for the select element.
+  prompt: A map representing the default selection. The key will the select
+          option's value and the val will be its visible name.
+  required: true or false, is this field required?
+
+  Any additional named arguments will be added the select element's html
+  attributes."
+  [field-name & {:keys [title source prompt value visible required]
+                 :as options}]
+  (let [options (dissoc options :source :prompt :value :visible :required)
+        source (or source
+                   [{:id "yes" :name "Yes"} {:id "no" :name "No"}])
+        value (or value :id)
+        visible (or visible :name)
+        prompt (first prompt)
+        select-html [:select (merge {:name (name field-name)} options)]
+        select-html (if prompt
+                      (concat select-html
+                              [[:option
+                                {:value (key prompt)} (val prompt)]])
+                      select-html)
+        html-function
+        (fn [request]
+          (vec
+           (concat
+            select-html
+            (select-options (if (fn? source)
+                              (source request)
+                              source)
+                            value
+                            visible))))]
+    (assoc {:type :select
+            :label (fn [t r]
+                     (field-label (or title t) field-name r))
+            :field-name field-name
+            :html html-function
+            :value-fn value}
+      :required (true? required))))
+
 (defn wrap-checkboxes-in-group [coll]
   [:div {:class "group"}
      (map #(vector :div {:class "group-checkbox"} %) coll)])
@@ -212,34 +268,6 @@
                    (property-lookup props (keyword value))])
                coll))
       :value-fn value-fn}))
-
-#_(defn- options [coll key-key value-key]
-  (map #(vector :option {:value  (key-key %)} (value-key %)) coll))
-
-#_(defn select
-  "Create a select form element."
-  ([title fname coll kvs & optional]
-     (let [key-and-value (first (dissoc kvs :prompt))
-           prompt (first (:prompt kvs))
-           k (key key-and-value)
-           v (val key-and-value)
-           opts (first (filter map? optional))
-           req (first (filter #(not (map? %)) optional))
-           options (options coll k v)
-           select-html [:select (merge {:name (name fname)} opts)]
-           select-html (if prompt
-                         (concat select-html
-                                 [[:option
-                                   {:value (key prompt)} (val prompt)]])
-                         select-html)]
-       {:type :select
-        :label (field-label title fname req)
-        :field-name fname
-        :html (vec
-               (concat
-                select-html
-                options))
-        :value-fn k})))
 
 #_(defn multi-select [title fname coll kv & optional]
   (let [kv (dissoc kv :prompt)
@@ -698,6 +726,19 @@
                  %)
               fields))))
 
+(defn- actualize-html
+  "The html value for each field can either be an html data structure or a
+  function of the request which generates that structure. This function will
+  ensure that all such functions have been called and that all html values
+  are generated."
+  [fields request]
+  (vec (map #(let [html (:html %)
+                   html (if (fn? html)
+                          (html request)
+                          html)]
+               (assoc % :html html))
+            fields)))
+
 (defn- get-form
   "Handle a form get request."
   [request name form-data validator options]
@@ -724,7 +765,8 @@
         layout (or layout [1])
         fields (-> (cond (vector? fields) fields
                          (fn? fields) (fields request form-data))
-                   (set-required validator))
+                   (set-required validator)
+                   (actualize-html request))
         style (or style :default)
         route-params (:route-params request)]
     (template style

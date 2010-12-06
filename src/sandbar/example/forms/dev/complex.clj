@@ -55,7 +55,8 @@
 (def validator
      (build-validator
       (non-empty-string :username :password :first-name :last-name :email
-                        properties)))
+                        properties)
+      (integer-number :region properties)))
 
 #_(defn marshal-user-form [params]
   (-> (forms/get-params [:id :username :password :first-name
@@ -83,10 +84,11 @@
                                    :roles
                                    (db/all-roles)
                                    identity)
-           #_(forms/select properties
-                           :region
-                           (db/all-regions)
-                           {:id :value :prompt {"" "Select a Region"}})
+           (select :region
+                   :source (db/all-regions)
+                   :prompt {"" "Select a Region"}
+                   :value :id
+                   :visible :value)
            #_(forms/multi-select properties
                                  :languages
                                  (db/all-langs)
