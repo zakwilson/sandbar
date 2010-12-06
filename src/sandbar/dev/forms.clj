@@ -735,8 +735,8 @@
           marshal
           clean-form-input))))
 
-(defn- post-form
-  "Handle a form post request."
+(defn- submit-form
+  "Handle a form post or put request."
   [request name validator options]
   (let [{:keys [on-success on-cancel marshal]} options
         {:keys [params]} request
@@ -776,7 +776,7 @@
                (assoc % :html html))
             fields)))
 
-(defn- get-form
+(defn- show-form
   "Handle a form get request."
   [request name form-data validator options]
   (let [{:keys [load defaults buttons title layout fields style properties
@@ -877,8 +877,8 @@
           options (assoc options :title title)
           validator (or validator identity)
           response (if (some #{request-method} [:post :put])
-                     (post-form request name validator options)
-                     (get-form request name form-data validator options))]
+                     (submit-form request name validator options)
+                     (show-form request name form-data validator options))]
       (if (map? response)
         response
         {:title title
