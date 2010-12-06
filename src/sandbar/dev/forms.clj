@@ -85,14 +85,14 @@
 ;; Form Elements
 ;;
 
-(defn field-label [title key req]
-  (let [title (if (map? title)
-                (property-lookup title key)
-                title)
+(defn field-label [label key req]
+  (let [label (if (map? label)
+                (property-lookup label key)
+                label)
         req (cond (keyword? req) req
                   (contains? (set req) key) :required
                   :else :optional)]
-    [:div {:class "field-label"} title
+    [:div {:class "field-label"} label
      (if (= req :required) [:span {:class "required"} "*"] "")]))
 
 (defn hidden
@@ -106,31 +106,31 @@
 #_(defn htmlfield
   ([fname content]
      (htmlfield nil content {:id fname}))
-  ([title content options & more]
+  ([label content options & more]
      (let [fname (:id options)]
        {:type :htmlfield
-        :label (if title (field-label title fname :optional) [:div])
+        :label (if label (field-label label fname :optional) [:div])
         :field-name fname
         :html [:div options content]})))
 
 (defn textfield
   "Create a form textfield. The first argument is the field name. Optional
-  named arguments are title and required. Any other named arguments will be
+  named arguments are label and required. Any other named arguments will be
   added to the field's html attributes.
 
   Examples:
 
   (textfield :age)
-  (textfield :age :title \"Age\")
-  (textfield :age :title \"Age\" :required true)
-  (textfield :age :title \"Age\" :required true :size 50)
+  (textfield :age :label \"Age\")
+  (textfield :age :label \"Age\" :required true)
+  (textfield :age :label \"Age\" :required true :size 50)
   (textfield :age :size 50 :id :age :value \"x\")"
-  [field-name & {:keys [title required] :as options}]
+  [field-name & {:keys [label required] :as options}]
   (let [options (-> (merge {:size 35} options)
-                    (dissoc :title :required))]
+                    (dissoc :label :required))]
     (assoc {:type :textfield
-            :label (fn [t r]
-                     (field-label (or title t) field-name r))
+            :label (fn [l r]
+                     (field-label (or label l) field-name r))
             :field-name field-name
             :html [:input
                    (merge {:type "Text" :name (name field-name) :value ""
@@ -148,20 +148,20 @@
 
 (defn textarea
   "Create a form textarea. First argument is the field name. Optional named
-  arguments are title and required. Any other arguments will be added to the
+  arguments are label and required. Any other arguments will be added to the
   field's html attributes.
 
   Examples:
 
   (textarea :notes)
-  (textarea :nates :title \"Notes\")
-  (textarea :notes :title \"Notes\" :required true)
+  (textarea :nates :label \"Notes\")
+  (textarea :notes :label \"Notes\" :required true)
   (textarea :notes :rows 5 :cols 80)"
-  [field-name & {:keys [title required] :as options}]
-  (let [options (dissoc options :title :required)]
+  [field-name & {:keys [label required] :as options}]
+  (let [options (dissoc options :label :required)]
     (assoc {:type :textarea
-            :label (fn [t r]
-                     (field-label (or title t) field-name r))
+            :label (fn [l r]
+                     (field-label (or label l) field-name r))
             :field-name field-name
             :html [:textarea (merge {:name (name field-name)} options)]}
       :required (true? required))))
@@ -175,17 +175,17 @@
 
 (defn checkbox
   "Create a form checkbox. The first argument is the field name. The named
-  argument title is optional. Any other named arguments will be added to the
+  argument label is optional. Any other named arguments will be added to the
   field's html attributes.
 
   Examples:
 
   (checkbox :elated)
-  (checkbox :elated :title \"Elated\")
-  (checkbox :elated :title \"Elated\" :id :elated)"
-  [field-name & {:keys [title] :as options}]
+  (checkbox :elated :label \"Elated\")
+  (checkbox :elated :label \"Elated\" :id :elated)"
+  [field-name & {:keys [label] :as options}]
   {:type :checkbox
-   :label (checkbox-label-fn field-name title "field-label")
+   :label (checkbox-label-fn field-name label "field-label")
    :field-name field-name
    :html [:input
           (merge {:type "checkbox"
@@ -212,16 +212,16 @@
   visible: A function which will be applied to each element in the source list
            to obtain the visible name of each option. Defaults to identity.
 
-  Other optional named arguments are title, prompt and required:
+  Other optional named arguments are label, prompt and required:
 
-  title: The title for the select element.
+  label: The label for the select element.
   prompt: A map representing the default selection. The key will the select
           option's value and the val will be its visible name.
   required: true or false, is this field required?
 
   Any additional named arguments will be added the select element's html
   attributes."
-  [field-name & {:keys [title source prompt value visible required]
+  [field-name & {:keys [label source prompt value visible required]
                  :as options}]
   (let [options (dissoc options :source :prompt :value :visible :required)
         source (or source
@@ -247,8 +247,8 @@
                             visible
                             properties))))]
     (assoc {:type :select
-            :label (fn [t r]
-                     (field-label (or title t) field-name r))
+            :label (fn [l r]
+                     (field-label (or label l) field-name r))
             :field-name field-name
             :html html-function
             :value-fn value}
@@ -260,12 +260,12 @@
 
 (defn multi-checkbox
   "Create a form multi-checkbox, which is a group of checkboxes."
-  [field-name & {:keys [title source value visible] :as options}]
+  [field-name & {:keys [label source value visible] :as options}]
   (let [source (or source [:red :blue :green])
         value-fn (or value name)
         visible-fn (or visible identity)]
     {:type :multi-checkbox
-     :label (checkbox-label-fn field-name title "group-title")
+     :label (checkbox-label-fn field-name label "group-label")
      :field-name field-name
      :html (fn [request properties]
              (wrap-checkboxes-in-group
@@ -279,11 +279,11 @@
                  (source request)
                  source))))}))
 
-#_(defn multi-select [title fname coll kv & optional]
+#_(defn multi-select [label fname coll kv & optional]
   (let [kv (dissoc kv :prompt)
         opts (merge {:multiple true :size 5} (first (filter map? optional)))
         req (first (filter #(not (map? %)) optional))]
-    (select title fname coll kv opts req)))
+    (select label fname coll kv opts req)))
 
 (defn form-to
   [[method action attrs] & body]
