@@ -745,14 +745,14 @@
         marshal (or marshal
                     (build-marshal-function))]
     (redirect
-     (if (form-cancelled? params)
-       on-cancel
-       (let [form-data (marshal params)
-             failure (get (-> request :headers) "referer")]
-         (println "marshaled form-data:" (str form-data))
-         (if-valid validator form-data
-                   on-success
-                   (store-errors-and-redirect name failure)))))))
+     (replace-params (:route-params request)
+      (if (form-cancelled? params)
+        on-cancel
+        (let [form-data (marshal params)
+              failure (get (-> request :headers) "referer")]
+          (if-valid validator form-data
+                    on-success
+                    (store-errors-and-redirect name failure))))))))
 
 (defn- set-required
   "Use the provided validator to set which fields are required."
