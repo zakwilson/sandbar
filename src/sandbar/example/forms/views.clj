@@ -6,23 +6,27 @@
         [sandbar.core :only [icon stylesheet]])
   (:require [sandbar.example.forms.database :as db]))
 
-(defn layout [content]
-  (html
-   (doctype :html4)
-   [:html
-    [:head
-     (stylesheet "sandbar.css")
-     (stylesheet "sandbar-forms.css")
-     (icon "icon.png")]
-    [:body
-     (if-let [m (flash-get :user-message)] [:div {:class "message"} m])
-     [:h2 "Sandbar Form Example"]
-     content]]))
+(defn layout [body]
+  (let [[body title] (if (map? body)
+                       ((juxt :body :title) body)
+                       [body ""])]
+    (html
+     (doctype :html4)
+     [:html
+      [:head
+       (stylesheet "sandbar.css")
+       (stylesheet "sandbar-forms.css")
+       (icon "icon.png")
+       [:title title]]
+      [:body
+       (if-let [m (flash-get :user-message)] [:div {:class "message"} m])
+       [:h2 "Sandbar Form Example"]
+       body]])))
 
 (defn home []
   (layout
    [:div
-    (link-to "/user/edit" "Add New User")
+    (link-to "/users/new" "Add New User")
     [:table
      [:tr
       [:th "Username"]
@@ -30,5 +34,5 @@
      (map #(let [{:keys [username id]} %]
              [:tr
               [:td username]
-              [:td (link-to (str "/user/edit/" id) "Edit")]])
+              [:td (link-to (str "/users/" id "/edit") "Edit")]])
           (db/all-things))]]))

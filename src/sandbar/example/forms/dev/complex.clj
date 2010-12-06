@@ -4,7 +4,7 @@
   (:use [ring.adapter.jetty :only [run-jetty]]
         [ring.middleware.file :only [wrap-file]]
         [ring.util.response :only [redirect]]
-        [compojure.core :only [defroutes GET POST]]
+        [compojure.core :only [defroutes GET POST PUT]]
         [sandbar.stateful-session :only [wrap-stateful-session
                                          flash-put!]]
         [sandbar.dev.forms]
@@ -69,60 +69,64 @@
 ;; Add a bindings option that can be used with multi-checkbox, select
 ;; and multi-select.
 
-(def user-form
-     (make-form :user-form
-       ;; don't know if passing the form-data is such a good idea when
-       ;; fields is passed a fuction.
-       :fields [(hidden :id)
-                (textfield :username)
-                (password :password)
-                (textfield :first-name)
-                (textfield :last-name)
-                (textfield :email)
-                (checkbox :account-enabled)
-                #_(forms/multi-checkbox properties
-                                        :roles
-                                        (db/all-roles)
-                                        identity)
-               #_(forms/select properties
-                             :region
-                             (db/all-regions)
-                             {:id :value :prompt {"" "Select a Region"}})
-               #_(forms/multi-select properties
-                                   :languages
-                                   (db/all-langs)
-                                   {:id :name})
-               #_(forms/textarea properties :notes {:rows 5 :cols 80})]
-       :buttons [[:save] [:cancel]]
-       ;; the load function should be a function of the params so that
-       ;; you don't have to depend on :id being there.
-       :load #(db/fetch %)
-       ;; marshal will be passed a function that can wrap the generated
-       ;; marshal function.
-       #_:marshal #_marshal-user-form
-       :on-cancel "/"
-       :on-success
-       #(do
-          (println "saving:" %)
-          (db/store %)
-          (flash-put! :user-message "User has been saved.")
-          "/")
-       :validator validator
-       :properties properties
-       :style :over-under
-      ;; it may not be a good idea to pass form-data
-       :title (fn [_ form-data] (if (:id form-data) "Edit User" "Create User"))
-       :layout [1 1 2 1 1 1 2 1]
-       :defaults {:email "unknown"
-                  :roles [:user]
-                  :account-enabled "Y"
-                  :languages [{:id 1 :name "Clojure"}]}))
+(defform user-form
+  "Form for managing users."
+  ;; don't know if passing the form-data is such a good idea when
+  ;; fields is passed a fuction.
+  :fields [(textfield :username)
+           (password :password)
+           (textfield :first-name)
+           (textfield :last-name)
+           (textfield :email)
+           (checkbox :account-enabled)
+           #_(forms/multi-checkbox properties
+                                   :roles
+                                   (db/all-roles)
+                                   identity)
+           #_(forms/select properties
+                           :region
+                           (db/all-regions)
+                           {:id :value :prompt {"" "Select a Region"}})
+           #_(forms/multi-select properties
+                                 :languages
+                                 (db/all-langs)
+                                 {:id :name})
+           #_(forms/textarea properties :notes {:rows 5 :cols 80})]
+  :buttons [[:save] [:cancel]]
+  ;; the load function should be a function of the params so that
+  ;; you don't have to depend on :id being there.
+  :load #(db/fetch %)
+  ;; marshal will be passed a function that can wrap the generated
+  ;; marshal function.
+  #_:marshal #_marshal-user-form
+  :on-cancel "/"
+  :on-success
+  #(do
+     (println "saving:" %)
+     (db/store %)
+     (flash-put! :user-message "User has been saved.")
+     "/")
+  :validator validator
+  :properties properties
+  :style :over-under
+  :title (fn [request] (if (get (-> request :params) "id")
+                         "Edit User"
+                         "Create User"))
+  :layout [1 1 2 1 1 1 2 1]
+  :defaults {:email "unknown"
+             :roles [:user]
+             :account-enabled "Y"
+             :languages [{:id 1 :name "Clojure"}]}
+  :create-action "/users"
+  :update-action "/users/:id"
+  :update-method :put)
 
 (defroutes routes
-
-  (GET "/user/edit/:id" request (views/layout (user-form request)))
-  (GET "/user/edit" request (views/layout (user-form request)))
-  (POST "/user/edit*" request (user-form request))
+  
+  (GET "/users/new" request (views/layout (user-form request)))
+  (POST "/users" request (user-form request))
+  (GET "/users/:id/edit" request (views/layout (user-form request)))
+  (PUT "/users/:id" request (user-form request))
   
   (GET "/" [] (views/home))
   (route/not-found "<h1>Not Found</h1>"))

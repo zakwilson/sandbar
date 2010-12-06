@@ -778,7 +778,7 @@
   (fn [request & [form-data]]
     (let [{:keys [request-method]} request
           title (cond (string? title) title
-                      (fn? title) (title request form-data)
+                      (fn? title) (title request)
                       :else nil)
           options (assoc options :title title)
           validator (or validator identity)
