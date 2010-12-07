@@ -58,19 +58,8 @@
                         properties)
       (integer-number :region properties)))
 
-#_(defn marshal-user-form [params]
-  (-> (forms/get-params [:id :username :password :first-name
-                         :last-name :email :region :notes]
-                        params)
-      (forms/get-yes-no-fields params #{:account-enabled})
-      (forms/get-multi-checkbox params :roles (db/all-roles) name)
-      (forms/get-multi-select params :languages (db/all-langs) :id)
-      forms/clean-form-input))
-
 (defform user-form
   "Form for managing users."
-  ;; don't know if passing the form-data is such a good idea when
-  ;; fields is passed a fuction.
   :fields [(textfield :username)
            (password :password)
            (textfield :first-name)
@@ -86,15 +75,13 @@
                    :prompt {"" "Select a Region"}
                    :value :id
                    :visible :value)
-           #_(forms/multi-select properties
-                                 :languages
-                                 (db/all-langs)
-                                 {:id :name})
+           #_(multi-select :languages
+                         :source (db/all-langs)
+                         :value :id
+                         :visible :name)
            (textarea :notes :rows 5 :cols 80)]
   :buttons [[:save] [:cancel]]
   :load #(db/fetch %)
-  ;; marshal will be passed a function that can wrap the generated
-  ;; marshal function.
   #_:marshal #_marshal-user-form
   :on-cancel "/"
   :on-success
@@ -110,12 +97,10 @@
                          "Edit User"
                          "Create User"))
   :layout [1 1 2 1 1 1]
-  ;; defaults will need to specified in terms of the forms
-  ;; representation not the external data
-  #_:defaults #_{:email "unknown"
-             :roles [:user]
+  :defaults {:email "unknown"
+             :roles ["user"]
              :account-enabled "Y"
-             :languages [{:id 1 :name "Clojure"}]}
+             :languages [1]}
   :create-action "/users"
   :update-action "/users/:id"
   :update-method :put)
