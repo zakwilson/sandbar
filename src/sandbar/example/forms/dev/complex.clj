@@ -12,7 +12,8 @@
                                    non-empty-string
                                    integer-number
                                    one-or-more-maps
-                                   add-validation-error]])
+                                   add-validation-error]]
+        [sandbar.util :only [index-by]])
   (:require [compojure.route :as route]
             [sandbar.example.forms.database :as db]
             [sandbar.example.forms.views :as views]))
@@ -56,7 +57,11 @@
      (build-validator
       (non-empty-string :username :password :first-name :last-name :email
                         properties)
-      (integer-number :region properties)))
+      #_(integer-number :region properties)))
+
+;; For multi feilds, the source will always have all values. Add a
+;; filter option for fields in case you do not want to show all values
+;; based on the current request.
 
 (defform user-form
   "Form for managing users."
@@ -66,20 +71,30 @@
            (textfield :last-name)
            (textfield :email)
            (checkbox :account-enabled)
-           (multi-checkbox :roles :source (db/all-roles))
-           (select :region
-                   :source (db/all-regions)
-                   :prompt {"" "Select a Region"}
-                   :value :id
-                   :visible :value)
-           (multi-select :languages
-                         :source (db/all-langs)
-                         :value :id
-                         :visible :name)
+           ;; Document - use bindings for setting the data sources and
+           ;; mappings for the next three fields.
+           (multi-checkbox :roles)
+           (select :region :prompt {"" "Select a Region"})
+           (multi-select :languages)
            (textarea :notes :rows 5 :cols 80)]
+  ;; Document - value and visible default to name and identity. This
+  ;; makes it easy to use lists of keywords as data sources. The data
+  ;; source is a function of the request. Be careful because the data
+  ;; source will be generated for both the get and post/put
+  ;; requests. the :data function will determine how data is
+  ;; represented in the map and defaults to identity. bindings has
+  ;; been pulled out because it is used for both displaying the form
+  ;; and marshaling data.
+  :bindings {:roles     {:source (constantly (db/all-roles))}
+             :region    {:value :id
+                         :visible :value
+                         :source (constantly (db/all-regions))
+                         :data :id}
+             :languages {:value :id
+                         :visible :name
+                         :source (constantly (db/all-langs))}}
   :buttons [[:save] [:cancel]]
   :load #(db/fetch %)
-  #_:marshal #_marshal-user-form
   :on-cancel "/"
   :on-success
   #(do
@@ -95,9 +110,10 @@
                          "Create User"))
   :layout [1 1 2 1 1 1 2]
   :defaults {:email "unknown"
-             :roles ["user"]
-             :account-enabled "Y"
-             :languages [1]}
+             :roles [:user]
+             :account-enabled true
+             :region 3
+             :languages [{:id 1 :name "Clojure"}]}
   :create-action "/users"
   :update-action "/users/:id"
   :update-method :put)

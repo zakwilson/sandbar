@@ -14,6 +14,7 @@
         [sandbar.stateful-session :only [flash-put!
                                          flash-get]]
         [sandbar.core :only [cpath get-param property-lookup]]
+        [sandbar.util :only [index-by]]
         [sandbar.validation :only [if-valid
                                    required-fields
                                    build-validator
@@ -199,7 +200,29 @@
                    (let [v (value-fn m)]
                      (get props v (name v))))]
     (map #(vector :option {:value  (key-fn %)} (value-fn %))
-        coll)))
+         coll)))
+
+(defmulti make-bindings (fn [type request bindings field-name] type))
+
+(defn- make-bindings* [request bindings field-name default-coll]
+  (let [{:keys [source value visible data]} (field-name bindings)
+        source (or source default-coll)
+        source (if (fn? source)
+                 (source request)
+                 source)
+        value (or value name)
+        data (or data identity)
+        visible (or visible identity)]
+    {:source source
+     :value value
+     :visible visible
+     :data data}))
+
+(defmethod make-bindings :select [type request bindings field-name]
+           (make-bindings* request bindings field-name [:yes :no]))
+
+(defmethod make-bindings :multi-checkbox [type request bindings field-name]
+           (make-bindings* request bindings field-name [:red :blue :green]))
 
 (defn select
   "Create a form select element. The first argument is the field name. The
@@ -225,12 +248,9 @@
 
   Any additional named arguments will be added to the select element's html
   attributes."
-  [field-name & {:keys [label source prompt value visible required]
+  [field-name & {:keys [label prompt required]
                  :as options}]
-  (let [options (dissoc options :source :prompt :value :visible :required)
-        source (or source [:yes :no])
-        value (or value name)
-        visible (or visible identity)
+  (let [options (dissoc options :prompt :required :label)
         prompt (first prompt)
         select-html [:select (merge {:name (name field-name)} options)]
         select-html (if prompt
@@ -239,22 +259,18 @@
                                 {:value (key prompt)} (val prompt)]])
                       select-html)
         html-function
-        (fn [request properties]
-          (vec
-           (concat
-            select-html
-            (select-options (if (fn? source)
-                              (source request)
-                              source)
-                            value
-                            visible
-                            properties))))]
+        (fn [request bindings properties]
+          (let [{:keys [source value visible]}
+                (make-bindings :select request bindings field-name)]
+            (vec
+             (concat
+              select-html
+              (select-options source value visible properties)))))]
     (assoc {:type :select
             :label (fn [l r]
                      (field-label (or label l) field-name r))
             :field-name field-name
-            :html html-function
-            :value-fn value}
+            :html html-function}
       :required (true? required))))
 
 (defn multi-select
@@ -291,24 +307,23 @@
   You may also use the label option to set the label for the checkbox group.
 
   This field is functionally equivalent to using a multi-select field."
-  [field-name & {:keys [label source value visible] :as options}]
-  (let [source (or source [:red :blue :green])
-        value-fn (or value name)
-        visible-fn (or visible identity)]
-    {:type :multi-checkbox
-     :label (checkbox-label-fn field-name label "group-label")
-     :field-name field-name
-     :html (fn [request properties]
+  [field-name & {:keys [label] :as options}]
+  {:type :multi-checkbox
+   :label (checkbox-label-fn field-name label "group-label")
+   :field-name field-name
+   :html (fn [request bindings properties]
+           (let [{:keys [source value visible]}
+                 (make-bindings :multi-checkbox request bindings field-name)
+                 filter-pred (:filter options)
+                 coll (if filter-pred
+                        (filter (partial filter-pred request) source)
+                        source)]
              (wrap-checkboxes-in-group
               (map
-               #(let [value (value-fn %)
-                      visible (visible-fn %)]
-                  [:input
-                   {:type "checkbox" :name field-name :value value}
-                   (property-lookup properties (keyword visible))])
-               (if (fn? source)
-                 (source request)
-                 source))))}))
+               #(vector :input
+                        {:type "checkbox" :name field-name :value (value %)}
+                        (property-lookup properties (keyword (visible %))))
+               coll))))})
 
 (defn form-to
   [[method action attrs] & body]
@@ -419,7 +434,7 @@
 ;; Marshal and Binding data
 ;;
 
-(defn checkbox->boolean
+(defn marshal-checkboxes
   "Get Y or N values for all keys in cb-set. These keys represent checkboxes
    which must have either Y or N value. If the checkbox is not present then
    is was not selected and is a N."
@@ -438,18 +453,28 @@
             new-map
             key-set)))
 
-(defn add-missing-multi
+(defn marshal-multi
   "Insure that there is a key for each multi element. Add an empty list for
   any multi that is missing from the params."
-  [m params key-set]
+  [m bindings params key-set type]
   (reduce (fn [form-data next-multi]
-            (let [values (next-multi form-data)
+            (let [{:keys [source value data]} (bindings next-multi)
+                  data (or data identity)
+                  source-fn (if source
+                              (let [indexed (index-by value source)]
+                                (fn [x] (data (get indexed x nil))))
+                              (fn [x] (keyword x)))
+                  values (next-multi form-data)
                   values (cond (sequential? values)
                                (vec values)
                                (not (nil? values))
                                [values]
-                               :else [])]
-              (assoc form-data next-multi values)))
+                               :else [])
+                  mapped-values (vec (map source-fn values))
+                  mapped-values (if (= type :_selects)
+                                  (first mapped-values)
+                                  mapped-values)]
+              (assoc form-data next-multi mapped-values)))
           m
           key-set))
 
@@ -523,6 +548,9 @@
                             %)
                          input-html)))
       input-field)))
+
+(defmethod set-form-field-value :multi-select [form-state input-field]
+  (set-form-field-value form-state (assoc input-field :type :select)))
 
 (defmethod set-form-field-value :multi-checkbox [form-state input-field]
   (let [checkboxes (map last (last (:html input-field)))
@@ -646,6 +674,11 @@
                     :name "_multi-selects"
                     :value (:field-name m)}])
 
+(defmethod create-hidden-field :select [form-state m]
+           [:input {:type "hidden"
+                    :name "_selects"
+                    :value (:field-name m)}])
+
 (def one-column-layout (repeat 1))
 
 (defmulti display-form-errors (fn [& args] (first args)))
@@ -672,18 +705,52 @@
     (vec (concat the-form
                  (map #(create-hidden-field form-state %)
                       (let [hidden-types #{:hidden :checkbox :multi-checkbox
-                                           :multi-select}]
+                                           :multi-select :select}]
                         (filter #(contains? hidden-types (:type %)) coll)))))))
 
+(defn unbind [form request bindings fields]
+  (do (println "unbind/form:")
+      (clojure.pprint/pprint form)
+      (println))
+  (let [form-data (:form-data form)
+        binding-fields (filter #(contains? #{:multi-checkbox
+                                             :multi-select
+                                             :select}
+                                           (:type %))
+                               fields)]
+    (merge form
+           {:form-data
+            (reduce (fn [form-data {:keys [field-name type]}]
+                      (let [type (if (= type :multi-select)
+                                   :select
+                                   type)
+                            {:keys [value data source]}
+                            (make-bindings type request bindings field-name)
+                            indexed (index-by data source)
+                            value (fn [c] (->> c
+                                               (get indexed)
+                                               value))
+                            current (field-name form-data)]
+                        (assoc form-data field-name
+                               (if (sequential? current)
+                                 (vec (map value current))
+                                 (value current)))))
+                    form-data
+                    binding-fields)})))
+
 (defn form-layout-grid
-  ([form-name coll request]
-     (form-layout-grid one-column-layout form-name coll request {} {}))
-  ([layout form-name coll request]
-     (form-layout-grid layout form-name coll request {} {}))
-  ([layout form-name coll request init-data props]
-     (if-let [form-state (flash-get form-name)]
-       (form-layout-grid* form-name layout form-state coll props)
-       (form-layout-grid* form-name layout {:form-data init-data} coll props))))
+  ([form-name fields request]
+     (form-layout-grid one-column-layout form-name fields request {} {}))
+  ([layout form-name fields request]
+     (form-layout-grid layout form-name fields request {} {}))
+  ([layout form-name fields request init-data bindings props]
+     (let [form-state (-> (or (flash-get form-name)
+                              {:form-data init-data})
+                          (unbind request bindings fields))]
+       (do (println "form-layout-grid/form-state:")
+           (clojure.pprint/pprint form-state)
+           (println))
+       (form-layout-grid* form-name layout form-state fields props))))
 
 (defmulti template (fn [& args] (first args)))
 
@@ -722,7 +789,7 @@
               (form-to [method (cpath action) attrs]
                        (append-buttons-to-table field-div buttons))]))
 
-(defn- wrap-marshal-multi [marshal params type]
+(defn- wrap-marshal-multi [marshal bindings params type]
   (let [multi (get-param params type)
         multi (when multi
                 (set (map keyword (if (sequential? multi)
@@ -732,14 +799,12 @@
       (fn [m] (-> m
                   marshal
                   (dissoc type)
-                  (add-missing-multi params multi)))
+                  (marshal-multi bindings params multi type)))
       marshal)))
 
 (defn- build-marshal-function
-  "Build the default marshaling function. All data in the resulting map will be
-  represented as strings, numbers and booleans or lists of each. Removes all
-  of the temporary fields."
-  []
+  "Build the default marshaling function. Removes all of the temporary fields."
+  [request bindings]
   (fn [params]
     (let [keys (map keyword (keys params))
           marshal (fn [m] (dissoc m :submit :* :_method))
@@ -752,11 +817,31 @@
                     (fn [m] (-> m
                                 marshal
                                 (dissoc :_checkboxes)
-                                (checkbox->boolean params checkboxes)))
+                                (marshal-checkboxes params
+                                                    checkboxes)))
                     
                     marshal)
-          marshal (wrap-marshal-multi marshal params :_multi-checkboxes)
-          marshal (wrap-marshal-multi marshal params :_multi-selects)]
+          marshal (wrap-marshal-multi marshal
+                                      (partial make-bindings
+                                               :multi-checkbox
+                                               request
+                                               bindings)
+                                      params
+                                      :_multi-checkboxes)
+          marshal (wrap-marshal-multi marshal
+                                      (partial make-bindings
+                                               :select
+                                               request
+                                               bindings)
+                                      params
+                                      :_multi-selects)
+          marshal (wrap-marshal-multi marshal
+                                      (partial make-bindings
+                                               :select
+                                               request
+                                               bindings)
+                                      params
+                                      :_selects)]
       (-> (get-params keys params)
           marshal
           clean-form-input))))
@@ -764,11 +849,12 @@
 (defn- submit-form
   "Handle a form post or put request."
   [request name validator options]
-  (let [{:keys [on-success on-cancel marshal]} options
+  (let [{:keys [on-success on-cancel bindings marshal]} options
         {:keys [params]} request
+        bindings (or bindings {})
         on-success (or on-success (constantly "/"))
         on-cancel (or on-cancel "/")
-        default-marshal (build-marshal-function)
+        default-marshal (build-marshal-function request bindings)
         marshal (if marshal
                   (fn [params]
                     (marshal default-marshal params))
@@ -800,10 +886,10 @@
   function of the request which generates that structure. This function will
   ensure that all such functions have been called and that all html values
   are generated."
-  [fields request properties]
+  [fields request bindings properties]
   (vec (map #(let [html (:html %)
                    html (if (fn? html)
-                          (html request properties)
+                          (html request bindings properties)
                           html)]
                (assoc % :html html))
             fields)))
@@ -811,10 +897,12 @@
 (defn- show-form
   "Handle a form get request."
   [request name form-data validator options]
-  (let [{:keys [load defaults buttons title layout fields style properties
-                create-method update-method create-action update-action]}
+  (let [{:keys [load bindings defaults buttons title layout fields style
+                properties create-method update-method create-action
+                update-action]}
         options
         {:keys [params uri]} request
+        bindings (or bindings {})
         properties (or properties {})
         load (or load (constantly nil))
         defaults (if defaults
@@ -836,7 +924,7 @@
         fields (-> (cond (vector? fields) fields
                          (fn? fields) (fields request form-data))
                    (set-required validator)
-                   (actualize-html request properties))
+                   (actualize-html request bindings properties))
         style (or style :default)
         update-action (if (fn? update-action)
                         (update-action request)
@@ -857,6 +945,7 @@
                                 fields
                                 request
                                 form-data
+                                bindings
                                 properties))))
 
 (defn make-form
@@ -930,6 +1019,7 @@
     (PUT \"/names/:id\" request (simple-form request)))"
   [name & {:keys [validator title] :as options}]
   (fn [request & [form-data]]
+    (println "----------")
     (let [{:keys [request-method]} request
           title (cond (string? title) title
                       (fn? title) (title request)
