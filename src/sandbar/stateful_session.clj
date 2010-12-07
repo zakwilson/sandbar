@@ -105,6 +105,14 @@
 (defn session-delete-key! [k]
   (swap! sandbar-session (fn [a b] (dissoc a b)) k))
 
+(defn session-pop!
+  ([k] (session-pop! k nil))
+  ([k default]
+     (if-let [v (session-get k default)]
+       (do (session-delete-key! k)
+           v)
+       default)))
+
 (defn destroy-session! []
   (swap! sandbar-session (constantly nil)))
 
