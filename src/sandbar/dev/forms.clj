@@ -96,12 +96,13 @@
      (if (= req :required) [:span {:class "required"} "*"] "")]))
 
 (defn hidden
-  ([fname] (hidden fname nil))
-  ([fname value]
+  "Create a hidden form field."
+  ([field-name] (hidden field-name nil))
+  ([field-name value]
      {:type :hidden
       :label ""
-      :field-name fname
-      :html [:input {:type "hidden" :name (name fname) :value value}]}))
+      :field-name field-name
+      :html [:input {:type "hidden" :name (name field-name) :value value}]}))
 
 #_(defn htmlfield
   ([fname content]
@@ -154,7 +155,7 @@
   Examples:
 
   (textarea :notes)
-  (textarea :nates :label \"Notes\")
+  (textarea :notes :label \"Notes\")
   (textarea :notes :label \"Notes\" :required true)
   (textarea :notes :rows 5 :cols 80)"
   [field-name & {:keys [label required] :as options}]
@@ -202,7 +203,7 @@
 
 (defn select
   "Create a form select element. The first argument is the field name. The
-  named arguments source value and visible are usually required:
+  named arguments source, value and visible are usually required:
 
   source: The data source for select options. May be either a literal vector
           or a function of the request which returns a sequence. Defaults to
@@ -211,21 +212,23 @@
           to obtain its value. Defaults to name.
   visible: A function which will be applied to each element in the source list
            to obtain the visible name of each option. Defaults to identity.
+           If you pass a property map to make-form and this function returns
+           a keyword then the keyword will be looked-up in the map to find
+           the display value.
 
   Other optional named arguments are label, prompt and required:
 
   label: The label for the select element.
-  prompt: A map representing the default selection. The key will the select
+  prompt: A map representing the default selection. The key will be the select
           option's value and the val will be its visible name.
   required: true or false, is this field required?
 
-  Any additional named arguments will be added the select element's html
+  Any additional named arguments will be added to the select element's html
   attributes."
   [field-name & {:keys [label source prompt value visible required]
                  :as options}]
   (let [options (dissoc options :source :prompt :value :visible :required)
-        source (or source
-                   [:yes :no])
+        source (or source [:yes :no])
         value (or value name)
         visible (or visible identity)
         prompt (first prompt)
@@ -255,6 +258,10 @@
       :required (true? required))))
 
 (defn multi-select
+  "Create a multi-select form field. This is the same as a select field but
+  with the attribute multiple set to true. The default size is 5 but can be
+  changed by passing a size option. This element does not take a prompt
+  option. See doc for select."
   [field-name & {:keys [title source value visible required]
                  :as options}]
   (let [options (merge {:multiple true :size 5} options)]
@@ -266,7 +273,24 @@
      (map #(vector :div {:class "group-checkbox"} %) coll)])
 
 (defn multi-checkbox
-  "Create a form multi-checkbox, which is a group of checkboxes."
+  "Create a form multi-checkbox, which is a group of checkboxes. The first
+  argument is the field name. The named arguments source, value and visible
+  are usually required:
+
+  source: The data source for the list of checkboxes. May be either a literal
+          vector or a function of the request which returns a sequence.
+          Defaults to [:red :blue :green]
+  value:  A function which will be applied to each element in the source list
+          to obtain its value. Defaults to name.
+  visible: A function which will be applied to each element in the source list
+           to obtain the visible name of each checkbox. Defaults to identity.
+           If you pass a property map to make-form and this function returns
+           a keyword then the keyword will be looked-up in the map to find
+           the display value.
+
+  You may also use the label option to set the label for the checkbox group.
+
+  This field is functionally equivalent to using a multi-select field."
   [field-name & {:keys [label source value visible] :as options}]
   (let [source (or source [:red :blue :green])
         value-fn (or value name)
@@ -415,8 +439,8 @@
             key-set)))
 
 (defn add-missing-multi
-  "Insure that there is a key for each multi-checkbox. Add an empty list for
-  any multi-checkbox that is missing from the params."
+  "Insure that there is a key for each multi element. Add an empty list for
+  any multi that is missing from the params."
   [m params key-set]
   (reduce (fn [form-data next-multi]
             (let [values (next-multi form-data)
@@ -428,13 +452,6 @@
               (assoc form-data next-multi values)))
           m
           key-set))
-
-(defn get-multi-select
-  "Add the key k to the map m where the value of k is a vector of
-   selected values."
-  [m params k all-values name-fn & more]
-  (let [name-fn (if (map? name-fn) (key (first name-fn)) name-fn)]
-    (add-missing-multi m params k all-values name-fn)))
 
 (defn- set-form-field-value* [form-state input-field update-fn]
   (let [field-name (:field-name input-field)
@@ -719,7 +736,9 @@
       marshal)))
 
 (defn- build-marshal-function
-  "Build the default marshaling function."
+  "Build the default marshaling function. All data in the resulting map will be
+  represented as strings, numbers and booleans or lists of each. Removes all
+  of the temporary fields."
   []
   (fn [params]
     (let [keys (map keyword (keys params))
@@ -749,8 +768,11 @@
         {:keys [params]} request
         on-success (or on-success (constantly "/"))
         on-cancel (or on-cancel "/")
-        marshal (or marshal
-                    (build-marshal-function))]
+        default-marshal (build-marshal-function)
+        marshal (if marshal
+                  (fn [params]
+                    (marshal default-marshal params))
+                  default-marshal)]
     (redirect
      (replace-params (:route-params request)
       (if (form-cancelled? params)
@@ -839,46 +861,73 @@
 
 (defn make-form
   "Create a form handler function. The resulting function is a function of the
-  request and optionally the form data. Options inculde:
+  request and optionally the form data. All options have reasonable default
+  values.
 
-  on-success: A function of the validated form data which returns the uri to be
-              redirected to. Defaults to (constantly \"/\").
-  on-cancel:  The uri to be redirected to when the cancel button in pushed.
-              Defaults to \"/\".
-  validator:  A function of a map which returns a validated map. Defaults to
-              identity.
-  marshal:    A function of the params which returns the form data. Defaults to
-              getting all values as they appear in params and then running the
-              data through clean-form-input.
+  Any useful form should include:
+
   fields:     Either a vector of fields or a function of the request and form
               data which returns a vector of fields. Defaults to nil.
   load:       A function of the id that will load the form data. id is
               (get (:route-params request) 'id'). Defaults to a function that
               returns nil.
+  on-success: A function of the validated form data which returns the uri to be
+              redirected to. Defaults to (constantly \"/\").
+  on-cancel:  The uri to be redirected to when the cancel button in pushed.
+              Defaults to \"/\".
+
+  For makeing RESTful forms use:
+
+  create-method: The request method to use when creating a new resource.
+  update-method: The request method to use when updating a resource.
+  create-action: The uri to use when creating a new resource. May be a string
+                 or a function of the request.
+  update-action: The uri to use when updating a resource. May be a string or
+                 a function of the request.
+
+  Optionally you may often use:
+
+  properties: A map which will be used to look up field labels to be displayed
+              on the form.
+  validator:  A function of a map which returns a validated map. Defaults to
+              identity.
   defaults:   A map of the default form values or a function of the request
               which returns a map of default values.
   buttons:    A sequence of form buttons. Defaults to [[:submit] [:cancel]]
+  layout:     A vector which indicates the field layout. Defaults to [1].
+
+  On rare occations you will need:
+
+  marshal:    A wrapper function for the default marshal function. Will be
+              passed the marshal function and params. Must return form data
+              which is ready to be validated. The default marshal function
+              will ensure that there is a key for each field and will get all
+              values represented as strings, numbers and booleans.
+
   style:      The form style. Defaults to :default but could also be :over-under
   title:      A function of the request and form data which returns the
               current form title. May also be a String. It is used when
               the style requires a title and returned in the resulting
               response map.
-  layout:     A vector which indicates the field layout. Defaults to [1].
 
   Example usage:
 
-  (def simple-form
-     (make-form :simple-form
+  (def names-form
+     (make-form :names-form
        :fields [(textfield :my-name :label \"My Name\")]
        :load #(fetch %)
        :on-success #(do (save %)
                         \"/landing/page/\")
-       :on-cancel \"/landing/page\"))
+       :on-cancel \"/landing/page\"
+       :create-action \"/names\"
+       :update-action \"/names/:id\"
+       :update-method :put))
 
-  (defroutes billing-bol-routes
-    (GET \"/simple/form/:id\" request (simple-form request))
-    (GET \"/simple/form\" request (simple-form request))
-    (POST \"/simple/form*\" request (simple-form request)))"
+  (defroutes my-routes
+    (GET \"/names/new\" request (layout (names-form request)))
+    (POST \"/names\" request (simple-form request))
+    (GET \"/names/:id/edit\" request (layout (simple-form request)))
+    (PUT \"/names/:id\" request (simple-form request)))"
   [name & {:keys [validator title] :as options}]
   (fn [request & [form-data]]
     (let [{:keys [request-method]} request
