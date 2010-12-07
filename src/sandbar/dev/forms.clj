@@ -254,6 +254,13 @@
             :value-fn value}
       :required (true? required))))
 
+(defn multi-select
+  [field-name & {:keys [title source value visible required]
+                 :as options}]
+  (let [options (merge {:multiple true :size 5} options)]
+    (-> (apply select field-name (flatten (seq options)))
+        (assoc :type :multi-select))))
+
 (defn wrap-checkboxes-in-group [coll]
   [:div {:class "group"}
      (map #(vector :div {:class "group-checkbox"} %) coll)])
@@ -278,12 +285,6 @@
                (if (fn? source)
                  (source request)
                  source))))}))
-
-#_(defn multi-select [label fname coll kv & optional]
-  (let [kv (dissoc kv :prompt)
-        opts (merge {:multiple true :size 5} (first (filter map? optional)))
-        req (first (filter #(not (map? %)) optional))]
-    (select label fname coll kv opts req)))
 
 (defn form-to
   [[method action attrs] & body]
@@ -413,7 +414,7 @@
             new-map
             key-set)))
 
-(defn add-missing-multi-checkboxes
+(defn add-missing-multi
   "Insure that there is a key for each multi-checkbox. Add an empty list for
   any multi-checkbox that is missing from the params."
   [m params key-set]
@@ -623,6 +624,11 @@
                     :name "_multi-checkboxes"
                     :value (:field-name m)}])
 
+(defmethod create-hidden-field :multi-select [form-state m]
+           [:input {:type "hidden"
+                    :name "_multi-selects"
+                    :value (:field-name m)}])
+
 (def one-column-layout (repeat 1))
 
 (defmulti display-form-errors (fn [& args] (first args)))
@@ -648,7 +654,8 @@
                           (filter #(not (= (:type %) :hidden)) coll))))]
     (vec (concat the-form
                  (map #(create-hidden-field form-state %)
-                      (let [hidden-types #{:hidden :checkbox :multi-checkbox}]
+                      (let [hidden-types #{:hidden :checkbox :multi-checkbox
+                                           :multi-select}]
                         (filter #(contains? hidden-types (:type %)) coll)))))))
 
 (defn form-layout-grid
@@ -698,13 +705,25 @@
               (form-to [method (cpath action) attrs]
                        (append-buttons-to-table field-div buttons))]))
 
+(defn- wrap-marshal-multi [marshal params type]
+  (let [multi (get-param params type)
+        multi (when multi
+                (set (map keyword (if (sequential? multi)
+                                    multi
+                                    [multi]))))]
+    (if multi
+      (fn [m] (-> m
+                  marshal
+                  (dissoc type)
+                  (add-missing-multi params multi)))
+      marshal)))
+
 (defn- build-marshal-function
   "Build the default marshaling function."
   []
   (fn [params]
     (let [keys (map keyword (keys params))
           marshal (fn [m] (dissoc m :submit :* :_method))
-          ;; Get checkboxes
           checkboxes (get-param params :_checkboxes)
           checkboxes (when checkboxes
                        (set (map keyword (if (sequential? checkboxes)
@@ -717,20 +736,8 @@
                                 (checkbox->boolean params checkboxes)))
                     
                     marshal)
-          ;; Get multi-checkboxes
-          multi-cb (get-param params :_multi-checkboxes)
-          multi-cb (when multi-cb
-                     (set (map keyword (if (sequential? multi-cb)
-                                         multi-cb
-                                         [multi-cb]))))
-          marshal (if multi-cb
-                    (fn [m] (-> m
-                                marshal
-                                (dissoc :_multi-checkboxes)
-                                (add-missing-multi-checkboxes params
-                                                              multi-cb)))
-                    
-                    marshal)]
+          marshal (wrap-marshal-multi marshal params :_multi-checkboxes)
+          marshal (wrap-marshal-multi marshal params :_multi-selects)]
       (-> (get-params keys params)
           marshal
           clean-form-input))))
@@ -750,6 +757,9 @@
         on-cancel
         (let [form-data (marshal params)
               failure (get (-> request :headers) "referer")]
+          (do (println "marshal:")
+              (clojure.pprint/pprint form-data)
+              (println))
           (if-valid validator form-data
                     on-success
                     (store-errors-and-redirect name failure))))))))

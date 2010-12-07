@@ -66,16 +66,13 @@
            (textfield :last-name)
            (textfield :email)
            (checkbox :account-enabled)
-           (multi-checkbox :roles
-                           :source (db/all-roles)
-                           :value name
-                           :visible name)
+           (multi-checkbox :roles :source (db/all-roles))
            (select :region
                    :source (db/all-regions)
                    :prompt {"" "Select a Region"}
                    :value :id
                    :visible :value)
-           #_(multi-select :languages
+           (multi-select :languages
                          :source (db/all-langs)
                          :value :id
                          :visible :name)
@@ -96,7 +93,7 @@
   :title (fn [request] (if (get (-> request :params) "id")
                          "Edit User"
                          "Create User"))
-  :layout [1 1 2 1 1 1]
+  :layout [1 1 2 1 1 1 2]
   :defaults {:email "unknown"
              :roles ["user"]
              :account-enabled "Y"
