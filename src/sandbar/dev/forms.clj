@@ -434,7 +434,7 @@
    selected values."
   [m params k all-values name-fn & more]
   (let [name-fn (if (map? name-fn) (key (first name-fn)) name-fn)]
-    (add-missing-multi-checkboxes m params k all-values name-fn)))
+    (add-missing-multi m params k all-values name-fn)))
 
 (defn- set-form-field-value* [form-state input-field update-fn]
   (let [field-name (:field-name input-field)
