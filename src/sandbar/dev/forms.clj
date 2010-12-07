@@ -850,15 +850,16 @@
   buttons:    A sequence of form buttons. Defaults to [[:submit] [:cancel]]
   style:      The form style. Defaults to :default but could also be :over-under
   title:      A function of the request and form data which returns the
-              current form title. May also be a String. This in only used when
-              the style requires a title.
+              current form title. May also be a String. It is used when
+              the style requires a title and returned in the resulting
+              response map.
   layout:     A vector which indicates the field layout. Defaults to [1].
 
   Example usage:
 
   (def simple-form
      (make-form :simple-form
-       :fields [(textfield \"My Name\" :my-name)]
+       :fields [(textfield :my-name :label \"My Name\")]
        :load #(fetch %)
        :on-success #(do (save %)
                         \"/landing/page/\")
@@ -886,6 +887,6 @@
 
 (defmacro defform [name & options]
   "Define a form handler function. The name may be optionally be
-  followed by a doc-string and metadata map."
+  followed by a doc-string and metadata map. See make-form for details."
   (let [[name options] (name-with-attributes name options)]
     `(def ~name (make-form ~(keyword name) ~@options))))
