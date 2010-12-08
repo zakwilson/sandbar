@@ -8,24 +8,24 @@
 
 (ns sandbar.form-authentication
   "Provide support for form based authentication."
-  (:use (compojure core)
-        (ring.util [response :only (redirect)])
-        (sandbar [auth :only (logout!
-                              create-authenticator)]
-                 [stateful-session :only (session-get
-                                          session-put!
-                                          flash-put!
-                                          session-delete-key!)]
-                 [core :only (property-lookup)]
-                 [validation :only (build-validator
-                                    non-empty-string
-                                    if-valid)]
-                 [forms :only (form-layout-grid
-                               textfield
-                               password
-                               template
-                               get-params
-                               store-errors-and-redirect)])))
+  (:use [ring.util [response :only [redirect]]]
+        [compojure.core]
+        [sandbar.auth :only [logout!
+                             create-authenticator]]
+        [sandbar.stateful-session :only [session-get
+                                         session-put!
+                                         flash-put!
+                                         session-delete-key!]]
+        [sandbar.core :only [property-lookup]]
+        [sandbar.validation :only [build-validator
+                                   non-empty-string
+                                   if-valid]]
+        [sandbar.forms :only [form-layout-grid
+                              textfield
+                              password
+                              template
+                              get-params
+                              store-errors-and-redirect]]))
 
 (defprotocol FormAuthAdapter
   "Protocol for processing form authenticaion credentials."

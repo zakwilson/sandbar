@@ -7,15 +7,18 @@
 ;; You must not remove this notice, or any other, from this software.
 
 (ns sandbar.auth
-  (:use (ring.util [response :only (redirect)])
-        (clojure [set :only (intersection)])
-        (clojure.contrib [error-kit :as kit])
-        (sandbar [core :only (cpath
-                              remove-cpath
-                              redirect?
-                              redirect-301
-                              append-to-redirect-loc)]
-                 stateful-session)))
+  "Authentication and authorization."
+  (:use [clojure.set :only [intersection]]
+        [ring.util.response :only [redirect]]
+        [sandbar.core :only [cpath
+                             remove-cpath
+                             redirect?
+                             redirect-301
+                             append-to-redirect-loc]]
+        [sandbar.stateful-session :only [session-get
+                                         session-put!
+                                         session-delete-key!]])
+  (:require [clojure.contrib.error-kit :as kit]))
 
 (def *hash-delay* 1000)
 

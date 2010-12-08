@@ -8,7 +8,7 @@
 
 (ns sandbar.core
   "Common code used throughout Sandbar."
-  (:use (hiccup core page-helpers)))
+  (:use [hiccup.page-helpers :only [link-to include-css include-js]]))
 
 ;;
 ;; Working with context paths

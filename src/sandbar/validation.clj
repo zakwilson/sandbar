@@ -7,8 +7,9 @@
 ;; You must not remove this notice, or any other, from this software.
 
 (ns sandbar.validation
-  (:use (sandbar [core :only (property-lookup)]
-                 [util :only (append-to-keyword)])))
+  "Clojure map validation."
+  (:use [sandbar.core :only [property-lookup]]
+        [sandbar.util :only [append-to-keyword]]))
 
 (defmacro if-valid [validator m success failure]
   `(let [result# (~validator ~m)]
@@ -18,8 +19,6 @@
          (~failure (dissoc ~m :_validation-errors) errors#)))))
 
 ;;
-;; Heavy Macro Action
-;; ==================
 ;; The following two functions and the macro build-validator allow you
 ;; to write the following validator:
 ;;

@@ -7,8 +7,9 @@
 ;; You must not remove this notice, or any other, from this software.
 
 (ns sandbar.util
-  (:use [clojure.contrib.str-utils :only (re-split re-gsub)])
-  (:import (java.io File)))
+  "Utility functions for sandbar."
+  (:use [clojure.contrib.str-utils :only [re-split re-gsub]])
+  (:import java.io.File))
 
 ;;
 ;; Misc

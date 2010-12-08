@@ -8,11 +8,13 @@
 
 (ns sandbar.tables
   "HTML tables which may be filtered, sorted and paged."
-  (:use (ring.util [codec :only (url-encode)])
-        (clojure.contrib [json :only (json-str)])
-        (hiccup core page-helpers)
-        (sandbar core stateful-session))
-  (:require [clojure [string :as str]]))
+  (:use [clojure.contrib.json :only [json-str]]
+        [ring.util.codec :only [url-encode]]
+        [hiccup.page-helpers :only [include-js]]
+        [sandbar.core :only [get-param link-to-js image cpath]]
+        [sandbar.stateful-session :only [update-session!
+                                         session-get]])
+  (:require [clojure.string :as str]))
 
 (declare *table-id*)
 

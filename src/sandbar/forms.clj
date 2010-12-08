@@ -19,10 +19,10 @@
                                    required-fields
                                    build-validator
                                    validation-errors]])
-  (:require [compojure.route :as route]
-            [clojure.string :as string]
+  (:require [clojure.string :as string]
             [clojure.contrib.json :as json]
-            [clojure.pprint :as pretty]))
+            [clojure.pprint :as pretty]
+            [compojure.route :as route]))
 
 ;;
 ;; Utilities

@@ -8,7 +8,8 @@
 
 (ns sandbar.stateful-session
   "Middleware for working with 'stateful' sessions."
-  (:use (ring.middleware flash session)))
+  (:use [ring.middleware.flash :only [wrap-flash]]
+        [ring.middleware.session :only [wrap-session]]))
 
 (declare sandbar-session)
 (declare sandbar-flash)
