@@ -1,10 +1,10 @@
-(ns sandbar.example.forms.views
+(ns sandbar.dev.views
   "Common views which are used by all of the form examples."
   (:use [hiccup.core :only [html]]
         [hiccup.page-helpers :only [doctype link-to]]
         [sandbar.stateful-session :only [flash-get]]
         [sandbar.core :only [icon stylesheet]])
-  (:require [sandbar.example.forms.database :as db]))
+  (:require [sandbar.example.database :as db]))
 
 (defn layout [body]
   (let [[body title] (if (map? body)

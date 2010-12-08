@@ -15,7 +15,7 @@
                  test-fixtures
                  form-authentication
                  [test :only (t)])
-        (sandbar.dev user-manager)))
+        #_(sandbar.dev user-manager)))
 
 (defn test-login-load-fn
   ([k] (test-login-load-fn k {} {}))
@@ -27,7 +27,7 @@
            (= k :user_role) [{:user_id 1 :role_id 1}]
            :else {})))
 
-(deftest test-login-validator
+#_(deftest test-login-validator
   (let [auth-source (form-authentication-adapter test-login-load-fn {})]
     (is (= ((login-validator auth-source)
             {:username "u"})
@@ -52,7 +52,7 @@
             :username "x" :password "test"}))))
 
 
-(deftest test-authenticate!
+#_(deftest test-authenticate!
   (let [auth-source (form-authentication-adapter test-login-load-fn {})]
     (t "authenticate!"
        (binding [sandbar-session (atom {})

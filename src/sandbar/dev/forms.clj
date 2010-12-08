@@ -1026,7 +1026,7 @@
          :body response}))))
 
 (defmacro defform [name & options]
-  "Define a form handler function. The name may be optionally be
+  "Define a form handler function. The name may optionally be
   followed by a doc-string and metadata map. See make-form for details."
   (let [[name options] (name-with-attributes name options)]
     `(def ~name (make-form ~(keyword name) ~@options))))

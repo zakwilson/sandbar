@@ -1,4 +1,4 @@
-(ns sandbar.example.forms.dev.complex
+(ns sandbar.dev.complex
   "Create a complex form using sandbar.forms. This demo shows most of
    the options that are available for defform."
   (:use [ring.adapter.jetty :only [run-jetty]]
@@ -15,8 +15,8 @@
                                    add-validation-error]]
         [sandbar.util :only [index-by]])
   (:require [compojure.route :as route]
-            [sandbar.example.forms.database :as db]
-            [sandbar.example.forms.views :as views]))
+            [sandbar.example.database :as db]
+            [sandbar.example.views :as views]))
 
 (def properties
      {:username "Username"
