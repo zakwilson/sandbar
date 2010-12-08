@@ -86,7 +86,9 @@
 ;; Form Elements
 ;;
 
-(defn field-label [label key req]
+(defn field-label
+  "Create a field label for a form element."
+  [label key req]
   (let [label (if (map? label)
                 (property-lookup label key)
                 label)
@@ -149,7 +151,7 @@
                                     {:type "Password"})]))))
 
 (defn textarea
-  "Create a form textarea. First argument is the field name. Optional named
+  "Create a form textarea. The first argument is the field name. Optional named
   arguments are label and required. Any other arguments will be added to the
   field's html attributes.
 
@@ -178,7 +180,8 @@
 (defn checkbox
   "Create a form checkbox. The first argument is the field name. The named
   argument label is optional. Any other named arguments will be added to the
-  field's html attributes.
+  field's html attributes. The value returned from a checkbox with will true
+  or nil.
 
   Examples:
 
@@ -204,7 +207,10 @@
 
 (defmulti make-bindings (fn [type request bindings field-name] type))
 
-(defn- make-bindings* [request bindings field-name default-coll]
+(defn- make-bindings*
+  "Create default bindings for missing values and, if the source is a function
+  of the request, call it."
+  [request bindings field-name default-coll]
   (let [{:keys [source value visible data]} (field-name bindings)
         source (or source default-coll)
         source (if (fn? source)
@@ -225,21 +231,8 @@
            (make-bindings* request bindings field-name [:red :blue :green]))
 
 (defn select
-  "Create a form select element. The first argument is the field name. The
-  named arguments source, value and visible are usually required:
-
-  source: The data source for select options. May be either a literal vector
-          or a function of the request which returns a sequence. Defaults to
-          [:yes :no]
-  value:  A function which will be applied to each element in the source list
-          to obtain its value. Defaults to name.
-  visible: A function which will be applied to each element in the source list
-           to obtain the visible name of each option. Defaults to identity.
-           If you pass a property map to make-form and this function returns
-           a keyword then the keyword will be looked-up in the map to find
-           the display value.
-
-  Other optional named arguments are label, prompt and required:
+  "Create a form select element. The first argument is the field name. Other
+  optional named arguments are label, prompt and required:
 
   label: The label for the select element.
   prompt: A map representing the default selection. The key will be the select
@@ -247,7 +240,9 @@
   required: true or false, is this field required?
 
   Any additional named arguments will be added to the select element's html
-  attributes."
+  attributes.
+
+  Use the :bindings option of make-form to set the data source for this field."
   [field-name & {:keys [label prompt required]
                  :as options}]
   (let [options (dissoc options :prompt :required :label)
@@ -277,7 +272,9 @@
   "Create a multi-select form field. This is the same as a select field but
   with the attribute multiple set to true. The default size is 5 but can be
   changed by passing a size option. This element does not take a prompt
-  option. See doc for select."
+  option. See doc for select.
+
+  Use the :bindings option of make-form to set the data source for this field."
   [field-name & {:keys [title source value visible required]
                  :as options}]
   (let [options (merge {:multiple true :size 5} options)]
@@ -290,23 +287,12 @@
 
 (defn multi-checkbox
   "Create a form multi-checkbox, which is a group of checkboxes. The first
-  argument is the field name. The named arguments source, value and visible
-  are usually required:
+  argument is the field name. The named argument label may be used to set the
+  label for the group.
 
-  source: The data source for the list of checkboxes. May be either a literal
-          vector or a function of the request which returns a sequence.
-          Defaults to [:red :blue :green]
-  value:  A function which will be applied to each element in the source list
-          to obtain its value. Defaults to name.
-  visible: A function which will be applied to each element in the source list
-           to obtain the visible name of each checkbox. Defaults to identity.
-           If you pass a property map to make-form and this function returns
-           a keyword then the keyword will be looked-up in the map to find
-           the display value.
+  This field is functionally equivalent to using a multi-select field.
 
-  You may also use the label option to set the label for the checkbox group.
-
-  This field is functionally equivalent to using a multi-select field."
+  Use the :bindings option of make-form to set the data source for this field."
   [field-name & {:keys [label] :as options}]
   {:type :multi-checkbox
    :label (checkbox-label-fn field-name label "group-label")
@@ -435,9 +421,9 @@
 ;;
 
 (defn marshal-checkboxes
-  "Get Y or N values for all keys in cb-set. These keys represent checkboxes
-   which must have either Y or N value. If the checkbox is not present then
-   is was not selected and is a N."
+  "Get true or nil values for all keys in key-set. These keys represent
+  checkboxes. If the checkbox is not present then is was not selected and
+  will be set to nil."
   [m params key-set]
   (let [new-map (reduce
                  (fn [a b]
@@ -454,8 +440,14 @@
             key-set)))
 
 (defn marshal-multi
-  "Insure that there is a key for each multi element. Add an empty list for
-  any multi that is missing from the params."
+  "Translate from the form representation of the submitted data to the native
+  representation. This will work on fields of type multi-select, select and
+  multi-checkbox. All of these fields have a list as a data source. Each
+  element in the list corresponds to an option that a user may select. The
+  value and visible name of the option are each a function on the element. The
+  native representation is also a function of the element. For each selected
+  option, this function will find the source element and then get the native
+  representation."
   [m bindings params key-set type]
   (reduce (fn [form-data next-multi]
             (let [{:keys [source value data]} (bindings next-multi)
@@ -789,7 +781,8 @@
               (form-to [method (cpath action) attrs]
                        (append-buttons-to-table field-div buttons))]))
 
-(defn- wrap-marshal-multi [marshal bindings params type]
+(defn- wrap-marshal-multi
+  [marshal bindings params type]
   (let [multi (get-param params type)
         multi (when multi
                 (set (map keyword (if (sequential? multi)
@@ -849,16 +842,12 @@
 (defn- submit-form
   "Handle a form post or put request."
   [request name validator options]
-  (let [{:keys [on-success on-cancel bindings marshal]} options
+  (let [{:keys [on-success on-cancel bindings]} options
         {:keys [params]} request
         bindings (or bindings {})
         on-success (or on-success (constantly "/"))
         on-cancel (or on-cancel "/")
-        default-marshal (build-marshal-function request bindings)
-        marshal (if marshal
-                  (fn [params]
-                    (marshal default-marshal params))
-                  default-marshal)]
+        marshal (build-marshal-function request bindings)]
     (redirect
      (replace-params (:route-params request)
       (if (form-cancelled? params)
@@ -964,6 +953,15 @@
               redirected to. Defaults to (constantly \"/\").
   on-cancel:  The uri to be redirected to when the cancel button in pushed.
               Defaults to \"/\".
+  bindings:   When using multi-select, multi-checkbox and select fields you
+              need to configure the data source for each field. bindings is a
+              map of field names to data sources where a data source is defined
+              as:
+              {:value name :visible identity :source (fn [request] ...)
+               :data identity}
+              source can be a function or a literal list. data will return
+              the native representation. value and visible are what appear in
+              the html.
 
   For makeing RESTful forms use:
 
@@ -986,12 +984,6 @@
   layout:     A vector which indicates the field layout. Defaults to [1].
 
   On rare occations you will need:
-
-  marshal:    A wrapper function for the default marshal function. Will be
-              passed the marshal function and params. Must return form data
-              which is ready to be validated. The default marshal function
-              will ensure that there is a key for each field and will get all
-              values represented as strings, numbers and booleans.
 
   style:      The form style. Defaults to :default but could also be :over-under
   title:      A function of the request and form data which returns the
@@ -1019,7 +1011,6 @@
     (PUT \"/names/:id\" request (simple-form request)))"
   [name & {:keys [validator title] :as options}]
   (fn [request & [form-data]]
-    (println "----------")
     (let [{:keys [request-method]} request
           title (cond (string? title) title
                       (fn? title) (title request)

@@ -44,20 +44,13 @@
       (integer-number :id)
       (non-empty-string :name)))
 
-#_(def validator
-     (build-validator
-      (non-empty-string :username :password :first-name :last-name :email
-                        properties)
-      (integer-number :region properties)
-      (one-or-more-maps :languages language-validator properties)
-      :ensure
-      password-strength))
-
 (def validator
      (build-validator
       (non-empty-string :username :password :first-name :last-name :email
                         properties)
-      #_(integer-number :region properties)))
+      (integer-number :region properties)
+      :ensure
+      password-strength))
 
 ;; For multi feilds, the source will always have all values. Add a
 ;; filter option for fields in case you do not want to show all values
