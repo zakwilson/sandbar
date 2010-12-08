@@ -2,7 +2,7 @@
 *.clj~
 pom.xml
 .DS_Store
-src/sandbar/examples
+src/examples
 
 # ignore output
 out/
