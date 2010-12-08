@@ -6,10 +6,9 @@
 ;; the terms of this license.
 ;; You must not remove this notice, or any other, from this software.
 
-(ns sandbar.test-util
-  (:use (clojure test)
-        (sandbar util
-                 [test :only (t)])))
+(ns sandbar.test.util
+  (:use [clojure.test :only [deftest testing is]]
+        [sandbar.util]))
  
 (deftest test-remove-file-ext
   (is (= (remove-file-ext "test.txt") "test"))
@@ -17,8 +16,8 @@
   (is (= (remove-file-ext "test") "test")))
 
 (deftest test-index-by
-  (t "index by"
-     (t "when you have two distinct maps in a collection"
+  (testing "index by"
+     (testing "when you have two distinct maps in a collection"
         (is (= (index-by :a [{:a "1" :b "A"}
                              {:a "2" :b "B"}])
                {"1" {:a "1" :b "A"}

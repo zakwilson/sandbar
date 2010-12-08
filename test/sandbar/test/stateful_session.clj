@@ -6,19 +6,20 @@
 ;; the terms of this license.
 ;; You must not remove this notice, or any other, from this software.
 
-(ns sandbar.stateful-session-test
+(ns sandbar.test.stateful-session
   (:require ring.middleware.flash)
-  (:use (clojure test)
-        (ring.middleware.session store)
-        (sandbar stateful-session
-                 [test :only (t)])))
+  (:use [clojure.test :only [deftest testing is]]
+        [sandbar.stateful-session]
+        [ring.middleware.session.store :only [SessionStore
+                                              read-session
+                                              write-session]]))
 
 (def session-key :sandbar.stateful-session/session)
 
 (deftest response-session-test
   (let [tst #'sandbar.stateful-session/response-session]
-    (t "sandbar-session is nil"
-       (t "response session is nil"
+    (testing "sandbar-session is nil"
+       (testing "response session is nil"
           (let [tst (fn [request-s incoming-ss]
                       (tst request-s
                            {:session nil}
@@ -29,7 +30,7 @@
             (is (= (tst {} {:x "x"}) nil))
             (is (= (tst {} nil) nil))))
        
-       (t "response session is empty"
+       (testing "response session is empty"
           (let [tst (fn [request-s incoming-ss]
                       (tst request-s
                            {}
@@ -40,7 +41,7 @@
             (is (= (tst {} {:x "x"}) nil))
             (is (= (tst {} nil) nil))))
 
-       (t "response session exists"
+       (testing "response session exists"
           (let [tst (fn [request-s incoming-ss]
                       (tst request-s
                            {:session {:b "b"}}
@@ -51,8 +52,8 @@
             (is (= (tst {} {:x "x"}) {:b "b"}))
             (is (= (tst {} nil) {:b "b"})))))
 
-    (t "sandbar-session is empty"
-       (t "response session is null"
+    (testing "sandbar-session is empty"
+       (testing "response session is null"
           (let [tst (fn [request-s incoming-ss]
                       (tst request-s
                            {:session nil}
@@ -62,7 +63,7 @@
             (is (= (tst {:session {:a "a"}} nil) nil))
             (is (= (tst {} {:x "x"}) {session-key {:x "x"}}))
             (is (= (tst {} nil) nil))))
-       (t "response session is empty"
+       (testing "response session is empty"
           (let [tst (fn [request-s incoming-ss]
                       (tst request-s
                            {}
@@ -72,7 +73,7 @@
             (is (= (tst {:session {:a "a"}} nil) :empty))
             (is (= (tst {} {:x "x"}) :empty))
             (is (= (tst {} nil) :empty))))
-       (t "response session exists"
+       (testing "response session exists"
           (let [tst (fn [request-s incoming-ss]
                       (tst request-s
                            {:session {:b "b"}}
@@ -85,8 +86,8 @@
                    {:b "b" session-key {:x "x"}}))
             (is (= (tst {} nil) {:b "b"})))))
     
-    (t "sandbar-session exists"
-       (t "response session is nil"
+    (testing "sandbar-session exists"
+       (testing "response session is nil"
           (let [tst (fn [request-s incoming-ss]
                       (tst request-s
                            {:session nil}
@@ -100,7 +101,7 @@
                    {session-key {:y "y"}}))
             (is (= (tst {} nil)
                    {session-key {:y "y"}}))))
-       (t "response session is empty"
+       (testing "response session is empty"
           (let [tst (fn [request-s incoming-ss]
                       (tst request-s
                            {}
@@ -114,7 +115,7 @@
                    {session-key {:y "y"}}))
             (is (= (tst {} nil)
                    {session-key {:y "y"}}))))
-       (t "response session is exists"
+       (testing "response session is exists"
           (let [tst (fn [request-s incoming-ss]
                       (tst request-s
                            {:session {:b "b"}}
@@ -130,127 +131,127 @@
                    {:b "b" session-key {:y "y"}})))))))
 
 (deftest wrap-stateful-session*-test
-  (t "stateful session"
-     (t "input empty, session in response"
+  (testing "stateful session"
+     (testing "input empty, session in response"
         (is (= ((wrap-stateful-session* (fn [r] {:session {:a "a"}})) {})
                {:session {:a "a"}})))
-     (t "input empty, use session-put!"
+     (testing "input empty, use session-put!"
         (is (= ((wrap-stateful-session* (fn [r] (do (session-put! :a "a")
                                                    {}))) {})
                {:session {session-key {:a "a"}}})))
-     (t "input contains values, use session-put! and return empty session"
+     (testing "input contains values, use session-put! and return empty session"
         (is (= ((wrap-stateful-session*
                  (fn [r] (do (session-put! :a "a")
                              {})))
                 {:session {:b "b"}})
                {:session {session-key {:a "a"} :b "b"}})))
-     (t "input contains values, use session-put! and return empty session"
+     (testing "input contains values, use session-put! and return empty session"
         (is (= ((wrap-stateful-session*
                  (fn [r] (do (session-put! :a "a")
                              {:session {}})))
                 {:session {:b "b"}})
                {:session {session-key {:a "a"}}})))
-     (t "input contains values, use session-put! and return empty session"
+     (testing "input contains values, use session-put! and return empty session"
         (is (= ((wrap-stateful-session*
                  (fn [r] (do (session-put! :a "a")
                              {:session nil})))
                 {:session {:b "b"}})
                {:session {session-key {:a "a"}}})))
-     (t "input contains values, use sesion-put! and return nil session"
+     (testing "input contains values, use sesion-put! and return nil session"
         (is (= ((wrap-stateful-session*
                  (fn [r] (do (session-put! :a "a")
                              {:session nil})))
                 {:session {:b "b"}})
                {:session {session-key {:a "a"}}})))
-     (t "input contains values, session in response replaces values"
+     (testing "input contains values, session in response replaces values"
         (is (= ((wrap-stateful-session*
                  (fn [r] {:session {:a "a"}}))
                 {:session {:b "b"}})
                {:session {:a "a"}})))
-     (t "input empty, use session-put! and return session"
+     (testing "input empty, use session-put! and return session"
         (is (= ((wrap-stateful-session*
                  (fn [r] (do (session-put! :a "a")
                              {:session {:b "b"}})))
                 {})
                {:session {session-key {:a "a"} :b "b"}})))
-     (t "input contains values, use session-put! and return session"
+     (testing "input contains values, use session-put! and return session"
         (is (= ((wrap-stateful-session*
                  (fn [r] (do (session-put! :a "a")
                              {:session {:b "b"}})))
                 {:session {:c "c"}})
                {:session {session-key {:a "a"} :b "b"}})))
-     (t "if session is not changed then do not include :session in response"
+     (testing "if session is not changed then do not include :session in response"
         (is (= ((wrap-stateful-session* (fn [r] {}))
                 {:session {:a "a"}})
                {})))
-     (t "if session is not changed then do not include :session in response"
+     (testing "if session is not changed then do not include :session in response"
         (is (= ((wrap-stateful-session* (fn [r] {}))
                 {:session {:a "a" session-key {:b "b"}}})
                {})))
-     (t "input contains values, return session nil removes values"
+     (testing "input contains values, return session nil removes values"
         (is (= ((wrap-stateful-session* (fn [r] {:session nil}))
                 {:session {:a "a"}})
                {:session nil})))
-     (t "input contains values, return session nil removes only func values"
+     (testing "input contains values, return session nil removes only func values"
         (is (= ((wrap-stateful-session* (fn [r] {:session nil}))
                 {:session {:a "a" session-key {:a "a"}}})
                {:session {session-key {:a "a"}}})))
-     (t "session-delete-key! does not remove values from functional session"
+     (testing "session-delete-key! does not remove values from functional session"
         (is (= ((wrap-stateful-session*
                  (fn [r] (do (session-delete-key! :a)
                              {})))
                 {:session {:a "a"}})
                {})))
-     (t "session-delete-key! does remove values from sandbar-session"
+     (testing "session-delete-key! does remove values from sandbar-session"
         (is (= ((wrap-stateful-session*
                  (fn [r] (do (session-delete-key! :a)
                              {})))
                 {:session {session-key {:a "a"} :a "a"}})
                {:session {:a "a"}})))
-     (t "session-delete-key! causes session to be deleted when it is empty"
+     (testing "session-delete-key! causes session to be deleted when it is empty"
         (is (= ((wrap-stateful-session*
                  (fn [r] (do (session-delete-key! :a)
                              {})))
                 {:session {session-key {:a "a"}}})
                {:session nil})))
-     (t "session-delete-key! causes session to be deleted when it is empty, when combined with wrap-flash"
+     (testing "session-delete-key! causes session to be deleted when it is empty, when combined with wrap-flash"
         (is (= ((wrap-stateful-session*
                  (ring.middleware.flash/wrap-flash
                   (fn [r] (do (session-delete-key! :a)
                               {}))))
                 {:session {session-key {:a "a"}}})
                {:session nil})))
-     (t "destroy-session! works"
+     (testing "destroy-session! works"
         (is (= ((wrap-stateful-session*
                  (fn [r] (do (destroy-session!)
                              {})))
                 {:session {session-key {:a "a" :b "b"}}})
                {:session nil})))
-     (t "destroy-session! only deletes things in the sandbar session"
+     (testing "destroy-session! only deletes things in the sandbar session"
         (is (= ((wrap-stateful-session*
                  (fn [r] (do (destroy-session!)
                              {})))
                 {:session {session-key {:a "a" :b "b"} :c "c"}})
                {:session {:c "c"}})))
-     (t "destroy-session! works when combined with wrap-flash"
+     (testing "destroy-session! works when combined with wrap-flash"
         (is (= ((wrap-stateful-session*
                  (ring.middleware.flash/wrap-flash
                   (fn [r] (do (destroy-session!)
                               {}))))
                 {:session {session-key {:a "a" :b "b"}}})
                {:session nil})))
-     (t "response values DO NOT override existing session values"
+     (testing "response values DO NOT override existing session values"
         (is (= ((wrap-stateful-session*
                  (fn [r] (do (session-put! :a "b")
                              {:session {:a "c"}})))
                 {:session {:a "a"}})
                {:session {session-key {:a "b"} :a "c"}})))
-     (t "no session in request or response or sandbar-session"
+     (testing "no session in request or response or sandbar-session"
         (is (= ((wrap-stateful-session*
                  (fn [r] {}))
                 {})
                {})))
-     (t "sandbar-sesssion should return nil when the handler returns nil"
+     (testing "sandbar-sesssion should return nil when the handler returns nil"
         (is (= ((wrap-stateful-session*
                  (fn [r] nil)) {:session {}})
                nil)))))

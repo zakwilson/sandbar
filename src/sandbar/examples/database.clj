@@ -1,4 +1,4 @@
-(ns sandbar.dev.database
+(ns sandbar.examples.database
   "In memory user database to support other examples.")
 
 (defonce db (atom {:id 1

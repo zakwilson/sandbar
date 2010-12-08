@@ -6,10 +6,10 @@
 ;; the terms of this license.
 ;; You must not remove this notice, or any other, from this software.
 
-(ns sandbar.core-test
-  (:use (clojure test)
-        (hiccup page-helpers)
-        (sandbar core test)))
+(ns sandbar.test.core
+  (:use [clojure.test :only [deftest testing is]]
+        [sandbar.core]
+        [hiccup.page-helpers :only [include-css include-js link-to]]))
 
 ;;
 ;; Working with context paths
@@ -99,28 +99,28 @@
   (is (false? (redirect? {:status 200}))))
 
 (deftest append-to-redirect-loc-test
-  (t "append to redirect location"
+  (testing "append to redirect location"
      (binding [app-context (atom "")]
-       (t "when append is blank"
+       (testing "when append is blank"
           (is (= (append-to-redirect-loc (redirect-301 "/p") "")
                  (redirect-301 "/p"))))
-       (t "when append is nil"
+       (testing "when append is nil"
           (is (= (append-to-redirect-loc (redirect-301 "/p") nil)
                  (redirect-301 "/p"))))
-       (t "when there is something to append"
+       (testing "when there is something to append"
           (is (= (append-to-redirect-loc (redirect-301 "/p") "/t")
                  (redirect-301 "/t/p"))))
-       (t "does nothing when loc is a complete URL with http scheme"
+       (testing "does nothing when loc is a complete URL with http scheme"
           (is (= (append-to-redirect-loc (redirect-301 "http://x/p") "/t")
                  (redirect-301 "http://x/p"))))
-       (t "does nothing when loc is a complete URL with https scheme"
+       (testing "does nothing when loc is a complete URL with https scheme"
           (is (= (append-to-redirect-loc (redirect-301 "https://x/p") "/t")
                  (redirect-301 "https://x/p")))))
      (binding [app-context (atom "/context")]
-       (t "when append is blank and there is a context"
+       (testing "when append is blank and there is a context"
           (is (= (append-to-redirect-loc (redirect-301 "/p") "")
                  (redirect-301 "/p"))))
-       (t "when there is something to append and there is a context"
+       (testing "when there is something to append and there is a context"
           (is (= (append-to-redirect-loc (redirect-301 "/p") "/t")
                  (redirect-301 "/t/p")))))))
 
@@ -194,14 +194,14 @@
          (link-to "/a" (image "a.png" "b.png" {:alt "A"})))))
 
 (deftest link-to-js-test
-  (t "link-to-js"
-     (t "with two arguments"
+  (testing "link-to-js"
+     (testing "with two arguments"
         (is (= (link-to-js (f "x") "y")
                [:a {:href "javascript:f('x');"} ["y"]])))
-     (t "with three arguments"
+     (testing "with three arguments"
         (is (= (link-to-js (f "x") "y" :i)
                [:a {:href "javascript:f_i('x');"} ["y"]])))
-     (t "with hyphen in qualifier"
+     (testing "with hyphen in qualifier"
         (is (= (link-to-js (f "x") "y" :i-m)
                [:a {:href "javascript:f_i_m('x');"} ["y"]])))))
 

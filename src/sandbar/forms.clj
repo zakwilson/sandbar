@@ -8,18 +8,21 @@
 
 (ns sandbar.forms
   "Forms and form layouts."
-  (:use [ring.util.response :only [redirect]]
+  (:use [clojure.contrib.def :only [name-with-attributes]]
+        [ring.util.response :only [redirect]]
         [compojure.core :only [routes GET POST]]
         [sandbar.stateful-session :only [flash-put!
                                          flash-get]]
         [sandbar.core :only [cpath get-param property-lookup]]
+        [sandbar.util :only [index-by]]
         [sandbar.validation :only [if-valid
                                    required-fields
                                    build-validator
                                    validation-errors]])
   (:require [compojure.route :as route]
             [clojure.string :as string]
-            [clojure.contrib.json :as json]))
+            [clojure.contrib.json :as json]
+            [clojure.pprint :as pretty]))
 
 ;;
 ;; Utilities
@@ -80,71 +83,67 @@
                                  (second %2))
           s m))
 
-(defn keyword-keys
-  "Takes a map with string keys and makes them keywords."
-  [m]
-  (into {} (map #(vector (keyword (first %)) (second %)) m)))
-
 ;;
 ;; Form Elements
 ;;
 
-(defn field-label [title key req]
-  (let [title (if (map? title)
-                (property-lookup title key)
-                title)
+(defn field-label
+  "Create a field label for a form element."
+  [label key req]
+  (let [label (if (map? label)
+                (property-lookup label key)
+                label)
         req (cond (keyword? req) req
                   (contains? (set req) key) :required
                   :else :optional)]
-    [:div {:class "field-label"} title
+    [:div {:class "field-label"} label
      (if (= req :required) [:span {:class "required"} "*"] "")]))
 
-(defn hidden [fname]
-  {:type :hidden
-   :label ""
-   :field-name fname
-   :html [:input {:type "hidden" :name (name fname) :value ""}]})
+(defn hidden
+  "Create a hidden form field."
+  ([field-name] (hidden field-name nil))
+  ([field-name value]
+     {:type :hidden
+      :label ""
+      :field-name field-name
+      :html [:input {:type "hidden" :name (name field-name) :value value}]}))
 
-(defn textarea
-  ([title fname] (textarea title fname {} :optional))
-  ([title fname options] (textarea title fname options :optional))
-  ([title fname options req]
-     {:type :textarea
-      :label (field-label title fname req)
-      :field-name fname
-      :html [:textarea (merge {:name (name fname)} options)]}))
-
-(defn htmlfield
+#_(defn htmlfield
   ([fname content]
      (htmlfield nil content {:id fname}))
-  ([title content options & more]
+  ([label content options & more]
      (let [fname (:id options)]
        {:type :htmlfield
-        :label (if title (field-label title fname :optional) [:div])
+        :label (if label (field-label label fname :optional) [:div])
         :field-name fname
         :html [:div options content]})))
 
 (defn textfield
-  "Create a form text field. In each arity, title can be either a string or
-   a map of keys to strings. If it is a map then the fname will be looked up
-   in this map and the value will be used as the title. In the arity 3 version
-   options can either be a map of options or the :required keyword."
-  ([title fname] (textfield title fname {} :optional))
-  ([title fname options] (if (map? options)
-                           (textfield title fname options :optional)
-                           (textfield title fname {} options)))
-  ([title fname options req]
-     (let [options (merge {:size 35} options)]
-       {:type :textfield
-       :label (field-label title fname req)
-       :field-name fname
-       :html [:input
-              (merge {:type "Text" :name (name fname) :value ""
-                      :class "textfield"} options)]})))
+  "Create a form textfield. The first argument is the field name. Optional
+  named arguments are label and required. Any other named arguments will be
+  added to the field's html attributes.
+
+  Examples:
+
+  (textfield :age)
+  (textfield :age :label \"Age\")
+  (textfield :age :label \"Age\" :required true)
+  (textfield :age :label \"Age\" :required true :size 50)
+  (textfield :age :size 50 :id :age :value \"x\")"
+  [field-name & {:keys [label required] :as options}]
+  (let [options (-> (merge {:size 35} options)
+                    (dissoc :label :required))]
+    (assoc {:type :textfield
+            :label (fn [l r]
+                     (field-label (or label l) field-name r))
+            :field-name field-name
+            :html [:input
+                   (merge {:type "Text" :name (name field-name) :value ""
+                           :class "textfield"} options)]}
+      :required (true? required))))
 
 (defn password
-  "Use textfield to create a text field and then change it to a
-   password field."
+  "Create a form password field. See doc for textfield."
   [& args]
   (let [textfield (apply textfield args)]
     (-> textfield
@@ -152,77 +151,166 @@
         (assoc :html [:input (merge (last (:html textfield))
                                     {:type "Password"})]))))
 
+(defn textarea
+  "Create a form textarea. The first argument is the field name. Optional named
+  arguments are label and required. Any other arguments will be added to the
+  field's html attributes.
+
+  Examples:
+
+  (textarea :notes)
+  (textarea :notes :label \"Notes\")
+  (textarea :notes :label \"Notes\" :required true)
+  (textarea :notes :rows 5 :cols 80)"
+  [field-name & {:keys [label required] :as options}]
+  (let [options (dissoc options :label :required)]
+    (assoc {:type :textarea
+            :label (fn [l r]
+                     (field-label (or label l) field-name r))
+            :field-name field-name
+            :html [:textarea (merge {:name (name field-name)} options)]}
+      :required (true? required))))
+
+(defn- checkbox-label-fn [field-name title class-name]
+  (fn [t]
+    [:span {:class class-name} (or title
+                                   (if (map? t)
+                                     (get t field-name field-name)
+                                     t))]))
+
 (defn checkbox
-  "Create a form checkbox. The title can be a map or a string. If it is a map
-   then the displayed title will be looked up in the map using fname."
-  ([title fname] (checkbox title fname {}))
-  ([title fname options]
-     {:type :checkbox
-      :label [:span {:class "field-label"} (if (map? title)
-                                             (property-lookup title fname)
-                                             title)]
-      :field-name fname
-      :html [:input
-             (merge {:type "checkbox"
-                     :name (name fname)
-                     :value "checkbox-true"} options)]}))
+  "Create a form checkbox. The first argument is the field name. The named
+  argument label is optional. Any other named arguments will be added to the
+  field's html attributes. The value returned from a checkbox with will true
+  or nil.
+
+  Examples:
+
+  (checkbox :elated)
+  (checkbox :elated :label \"Elated\")
+  (checkbox :elated :label \"Elated\" :id :elated)"
+  [field-name & {:keys [label] :as options}]
+  {:type :checkbox
+   :label (checkbox-label-fn field-name label "field-label")
+   :field-name field-name
+   :html [:input
+          (merge {:type "checkbox"
+                  :name (name field-name)
+                  :value "checkbox-true"} options)]
+   :required false})
+
+(defn- select-options [coll key-fn value-fn props]
+  (let [value-fn (fn [m]
+                   (let [v (value-fn m)]
+                     (get props v (name v))))]
+    (map #(vector :option {:value  (key-fn %)} (value-fn %))
+         coll)))
+
+(defmulti make-bindings (fn [type request bindings field-name] type))
+
+(defn- make-bindings*
+  "Create default bindings for missing values and, if the source is a function
+  of the request, call it."
+  [request bindings field-name default-coll]
+  (let [{:keys [source value visible data]} (field-name bindings)
+        source (or source default-coll)
+        source (if (fn? source)
+                 (source request)
+                 source)
+        value (or value name)
+        data (or data identity)
+        visible (or visible identity)]
+    {:source source
+     :value value
+     :visible visible
+     :data data}))
+
+(defmethod make-bindings :select [type request bindings field-name]
+           (make-bindings* request bindings field-name [:yes :no]))
+
+(defmethod make-bindings :multi-checkbox [type request bindings field-name]
+           (make-bindings* request bindings field-name [:red :blue :green]))
+
+(defn select
+  "Create a form select element. The first argument is the field name. Other
+  optional named arguments are label, prompt and required:
+
+  label: The label for the select element.
+  prompt: A map representing the default selection. The key will be the select
+          option's value and the val will be its visible name.
+  required: true or false, is this field required?
+
+  Any additional named arguments will be added to the select element's html
+  attributes.
+
+  Use the :bindings option of make-form to set the data source for this field."
+  [field-name & {:keys [label prompt required]
+                 :as options}]
+  (let [options (dissoc options :prompt :required :label)
+        prompt (first prompt)
+        select-html [:select (merge {:name (name field-name)} options)]
+        select-html (if prompt
+                      (concat select-html
+                              [[:option
+                                {:value (key prompt)} (val prompt)]])
+                      select-html)
+        html-function
+        (fn [request bindings properties]
+          (let [{:keys [source value visible]}
+                (make-bindings :select request bindings field-name)]
+            (vec
+             (concat
+              select-html
+              (select-options source value visible properties)))))]
+    (assoc {:type :select
+            :label (fn [l r]
+                     (field-label (or label l) field-name r))
+            :field-name field-name
+            :html html-function}
+      :required (true? required))))
+
+(defn multi-select
+  "Create a multi-select form field. This is the same as a select field but
+  with the attribute multiple set to true. The default size is 5 but can be
+  changed by passing a size option. This element does not take a prompt
+  option. See doc for select.
+
+  Use the :bindings option of make-form to set the data source for this field."
+  [field-name & {:keys [title source value visible required]
+                 :as options}]
+  (let [options (merge {:multiple true :size 5} options)]
+    (-> (apply select field-name (flatten (seq options)))
+        (assoc :type :multi-select))))
 
 (defn wrap-checkboxes-in-group [coll]
   [:div {:class "group"}
      (map #(vector :div {:class "group-checkbox"} %) coll)])
 
 (defn multi-checkbox
-  ([props many-spec]
-     (multi-checkbox props
-                     (:alias many-spec)
-                     ((:all-items many-spec))
-                     (:name-fn many-spec)))
-  ([props fname coll value-fn]
-     {:type :multi-checkbox
-      :label [:span {:class "group-title"} (property-lookup props fname)]
-      :field-name fname
-      :html (wrap-checkboxes-in-group
+  "Create a form multi-checkbox, which is a group of checkboxes. The first
+  argument is the field name. The named argument label may be used to set the
+  label for the group.
+
+  This field is functionally equivalent to using a multi-select field.
+
+  Use the :bindings option of make-form to set the data source for this field."
+  [field-name & {:keys [label] :as options}]
+  {:type :multi-checkbox
+   :label (checkbox-label-fn field-name label "group-label")
+   :field-name field-name
+   :html (fn [request bindings properties]
+           (let [{:keys [source value visible]}
+                 (make-bindings :multi-checkbox request bindings field-name)
+                 filter-pred (:filter options)
+                 coll (if filter-pred
+                        (filter (partial filter-pred request) source)
+                        source)]
+             (wrap-checkboxes-in-group
               (map
-               #(let [value (value-fn %)]
-                  [:input
-                   {:type "checkbox" :name fname :value value}
-                   (property-lookup props (keyword value))])
-               coll))
-      :value-fn value-fn}))
-
-(defn- options [coll key-key value-key]
-  (map #(vector :option {:value  (key-key %)} (value-key %)) coll))
-
-(defn select
-  "Create a select form element."
-  ([title fname coll kvs & optional]
-     (let [key-and-value (first (dissoc kvs :prompt))
-           prompt (first (:prompt kvs))
-           k (key key-and-value)
-           v (val key-and-value)
-           opts (first (filter map? optional))
-           req (first (filter #(not (map? %)) optional))
-           options (options coll k v)
-           select-html [:select (merge {:name (name fname)} opts)]
-           select-html (if prompt
-                         (concat select-html
-                                 [[:option
-                                   {:value (key prompt)} (val prompt)]])
-                         select-html)]
-       {:type :select
-        :label (field-label title fname req)
-        :field-name fname
-        :html (vec
-               (concat
-                select-html
-                options))
-        :value-fn k})))
-
-(defn multi-select [title fname coll kv & optional]
-  (let [kv (dissoc kv :prompt)
-        opts (merge {:multiple true :size 5} (first (filter map? optional)))
-        req (first (filter #(not (map? %)) optional))]
-    (select title fname coll kv opts req)))
+               #(vector :input
+                        {:type "checkbox" :name field-name :value (value %)}
+                        (property-lookup properties (keyword (visible %))))
+               coll))))})
 
 (defn form-to
   [[method action attrs] & body]
@@ -230,7 +318,7 @@
     (-> (if (contains? #{:get :post} method)
           [:form (merge {:method method-str, :action action} attrs)]
           [:form (merge {:method "POST", :action action} attrs)
-           (hidden (str "_method") method-str)])
+           (:html (hidden (str "_method") method-str))])
         (concat body)
         (vec))))
 
@@ -333,41 +421,55 @@
 ;; Marshal and Binding data
 ;;
 
-(defn get-yes-no-fields
-  "Get Y or N values for all keys in cb-set. These keys represent checkboxes
-   which must have either Y or N value. If the checkbox is not present then
-   is was not selected and is a N."
-  [m params cb-set]
+(defn marshal-checkboxes
+  "Get true or nil values for all keys in key-set. These keys represent
+  checkboxes. If the checkbox is not present then is was not selected and
+  will be set to nil."
+  [m params key-set]
   (let [new-map (reduce
                  (fn [a b]
                    (let [k (key b)
                          k (if (keyword? k) k (keyword k))]
-                     (if (and (contains? cb-set k)
+                     (if (and (contains? key-set k)
                               (= "checkbox-true" (val b)))
-                       (assoc a k "Y")
+                       (assoc a k true)
                        a)))
                  m
                  params)]
-    (reduce (fn [a b] (if (b a) a (assoc a b "N")))
+    (reduce (fn [a b] (if (b a) a (assoc a b false)))
             new-map
-            cb-set)))
+            key-set)))
 
-(defn get-multi-checkbox
-  "Add the key k to the map m where the value of k is is a vector of
-   selected values."
-  [m params k all-values name-fn]
-  (let [v (get-param params k)
-        selected-values (set (filter-nil-vec (if (or (number? v)
-                                                     (string? v)) [v] v)))
-        selected (filter #(contains? selected-values (name-fn %)) all-values)]
-    (assoc m k selected)))
-
-(defn get-multi-select
-  "Add the key k to the map m where the value of k is a vector of
-   selected values."
-  [m params k all-values name-fn & more]
-  (let [name-fn (if (map? name-fn) (key (first name-fn)) name-fn)]
-    (get-multi-checkbox m params k all-values name-fn)))
+(defn marshal-multi
+  "Translate from the form representation of the submitted data to the native
+  representation. This will work on fields of type multi-select, select and
+  multi-checkbox. All of these fields have a list as a data source. Each
+  element in the list corresponds to an option that a user may select. The
+  value and visible name of the option are each a function on the element. The
+  native representation is also a function of the element. For each selected
+  option, this function will find the source element and then get the native
+  representation."
+  [m bindings params key-set type]
+  (reduce (fn [form-data next-multi]
+            (let [{:keys [source value data]} (bindings next-multi)
+                  data (or data identity)
+                  source-fn (if source
+                              (let [indexed (index-by value source)]
+                                (fn [x] (data (get indexed x nil))))
+                              (fn [x] (keyword x)))
+                  values (next-multi form-data)
+                  values (cond (sequential? values)
+                               (vec values)
+                               (not (nil? values))
+                               [values]
+                               :else [])
+                  mapped-values (vec (map source-fn values))
+                  mapped-values (if (= type :_selects)
+                                  (first mapped-values)
+                                  mapped-values)]
+              (assoc form-data next-multi mapped-values)))
+          m
+          key-set))
 
 (defn- set-form-field-value* [form-state input-field update-fn]
   (let [field-name (:field-name input-field)
@@ -405,10 +507,11 @@
    form-state
    input-field
    (fn [previous-value html]
-     (assoc input-field :html
-            (vector :input (if (= previous-value "Y")
-                             (assoc (last html) :checked "true")
-                             (last html)))))))
+     (let [truthy #{"Y" "y" "yes" :yes true}]
+       (assoc input-field :html
+             (vector :input (if (contains? truthy previous-value)
+                              (assoc (last html) :checked "true")
+                              (last html))))))))
 
 (defmethod set-form-field-value :textarea [form-state input-field]
   (set-form-field-value*
@@ -422,7 +525,7 @@
         input-html (:html input-field)
         previous-val ((keyword field-name) (:form-data form-state))
         values (if (coll? previous-val)
-                 (map #((:value-fn input-field) %) previous-val)
+                 previous-val
                  [previous-val])]
     (if (seq values)
       (assoc input-field :html
@@ -439,18 +542,20 @@
                          input-html)))
       input-field)))
 
+(defmethod set-form-field-value :multi-select [form-state input-field]
+  (set-form-field-value form-state (assoc input-field :type :select)))
+
 (defmethod set-form-field-value :multi-checkbox [form-state input-field]
-  (let [title (:label input-field)
-        checkboxes (map last (last (:html input-field)))
+  (let [checkboxes (map last (last (:html input-field)))
         field-name (:field-name input-field)
         field-value (field-name (:form-data form-state))
-        value-set (set (map #((:value-fn input-field) %) field-value))
+        value-set (set field-value)
         new-checkboxes (map #(vector :input
                                      (let [attrs (second %)]
                                        (if (contains? value-set
-                                                     (:value attrs))
-                                        (assoc attrs :checked "true")
-                                        attrs))
+                                                      (:value attrs))
+                                         (assoc attrs :checked "true")
+                                         attrs))
                                      (last %))
                             checkboxes)]
     (assoc input-field :html
@@ -502,47 +607,70 @@
                  rows)))
       (vec (concat [:table] rows)))))
 
-(defmulti create-form-field-cell (fn [_ m] (:type m)))
+(defmulti create-form-field-cell (fn [state m p] (:type m)))
 
-(defmethod create-form-field-cell :checkbox [form-state m]
+(defmethod create-form-field-cell :checkbox [form-state m props]
   (let [{:keys [_ label field-name html]} m
         error-message (first (field-name form-state))
         field-row (filter-nil-vec [:div
                                    (:html (set-form-field-value form-state m))
-                                   label])]
+                                   (label props)])]
     (if error-message
       [:div
        [:div.error-message error-message]
        field-row]
       field-row)))
 
-(defmethod create-form-field-cell :multi-checkbox [form-state m]
+(defmethod create-form-field-cell :multi-checkbox [form-state m props]
   (let [{:keys [_ label field-name html]} m
         error-message (first (field-name form-state))
         field-row (filter-nil-vec
-                   (:html (set-form-field-value form-state m)))]
+                   (:html (set-form-field-value form-state m)))
+        label (label props)]
     (if error-message
       [:div
        [:div.error-message error-message]
        label field-row]
       [:div label field-row])))
 
-(defmethod create-form-field-cell :default [form-state m]
-  (let [{:keys [_ label field-name html]} m
+(defmethod create-form-field-cell :default [form-state m props]
+  (let [{:keys [_ label field-name html required]} m
         error-message (first (field-name form-state))
         field-row (filter-nil-vec
                    (:html (set-form-field-value form-state m)))
         id (:id (last (:html m)))
         error-id (when id {:id (str (name id) "-error")})]
     [:div.sandbar-field
-      label
+      (label props (if required :required :optional))
       (if error-message
         [:div.error-message (if id error-id {}) error-message]
         [:div.error-message (merge {:style "display:none;"} error-id)])
       field-row]))
 
-(defn- create-hidden-field [form-state m]
-  (:html (set-form-field-value form-state m)))
+(defmulti create-hidden-field (fn [state m] (:type m)))
+
+(defmethod create-hidden-field :hidden [form-state m]
+           (:html (set-form-field-value form-state m)))
+
+(defmethod create-hidden-field :checkbox [form-state m]
+           [:input {:type "hidden"
+                    :name "_checkboxes"
+                    :value (:field-name m)}])
+
+(defmethod create-hidden-field :multi-checkbox [form-state m]
+           [:input {:type "hidden"
+                    :name "_multi-checkboxes"
+                    :value (:field-name m)}])
+
+(defmethod create-hidden-field :multi-select [form-state m]
+           [:input {:type "hidden"
+                    :name "_multi-selects"
+                    :value (:field-name m)}])
+
+(defmethod create-hidden-field :select [form-state m]
+           [:input {:type "hidden"
+                    :name "_selects"
+                    :value (:field-name m)}])
 
 (def one-column-layout (repeat 1))
 
@@ -552,7 +680,7 @@
            [:div.form-error-message
             (map #(vector :div %) form-errors)])
 
-(defn form-layout-grid* [form-name layout form-state coll]
+(defn form-layout-grid* [form-name layout form-state coll props]
   (let [div (if-let [form-errors (:form form-state)]
               [:div
                (display-form-errors form-name form-errors)]
@@ -561,28 +689,66 @@
         (conj div 
               (apply layout-table
                      layout
-                     (map #(if-let [cell (create-form-field-cell form-state %)]
+                     (map #(if-let [cell (create-form-field-cell form-state
+                                                                 %
+                                                                 props)]
                              (vector cell)
                              nil)
                           (filter #(not (= (:type %) :hidden)) coll))))]
     (vec (concat the-form
                  (map #(create-hidden-field form-state %)
-                      (filter #(= (:type %) :hidden) coll))))))
+                      (let [hidden-types #{:hidden :checkbox :multi-checkbox
+                                           :multi-select :select}]
+                        (filter #(contains? hidden-types (:type %)) coll)))))))
+
+(defn unbind [form request bindings fields]
+  (do (println "unbind/form:")
+      (pretty/pprint form)
+      (println))
+  (let [form-data (:form-data form)
+        binding-fields (filter #(contains? #{:multi-checkbox
+                                             :multi-select
+                                             :select}
+                                           (:type %))
+                               fields)]
+    (merge form
+           {:form-data
+            (reduce (fn [form-data {:keys [field-name type]}]
+                      (let [type (if (= type :multi-select)
+                                   :select
+                                   type)
+                            {:keys [value data source]}
+                            (make-bindings type request bindings field-name)
+                            indexed (index-by data source)
+                            value (fn [c] (->> c
+                                               (get indexed)
+                                               value))
+                            current (field-name form-data)]
+                        (assoc form-data field-name
+                               (if (sequential? current)
+                                 (vec (map value current))
+                                 (value current)))))
+                    form-data
+                    binding-fields)})))
 
 (defn form-layout-grid
-  ([form-name coll request]
-     (form-layout-grid one-column-layout form-name coll request {}))
-  ([layout form-name coll request]
-     (form-layout-grid layout form-name coll request {}))
-  ([layout form-name coll request init-data]
-     (if-let [form-state (flash-get form-name)]
-       (form-layout-grid* form-name layout form-state coll)
-       (form-layout-grid* form-name layout {:form-data init-data} coll))))
+  ([form-name fields request]
+     (form-layout-grid one-column-layout form-name fields request {} {}))
+  ([layout form-name fields request]
+     (form-layout-grid layout form-name fields request {} {}))
+  ([layout form-name fields request init-data bindings props]
+     (let [form-state (-> (or (flash-get form-name)
+                              {:form-data init-data})
+                          (unbind request bindings fields))]
+       (do (println "form-layout-grid/form-state:")
+           (pretty/pprint form-state)
+           (println))
+       (form-layout-grid* form-name layout form-state fields props))))
 
 (defmulti template (fn [& args] (first args)))
 
-(defmethod template :default [_ action options field-table]
-           (template :basic action options field-table))
+(defmethod template :default [_ method action options field-table]
+           (template :basic method action options field-table))
 
 (defn form-header [form-title buttons]
   [:div {:class "form-header"}
@@ -598,400 +764,270 @@
    (display-buttons "footer" buttons)])
 
 (defmethod template :over-under [_
+                                 method
                                  action
                                  {:keys [buttons title attrs]}
                                  field-table]
            (let [title (or title "Your Title Goes Here")
                  buttons (or buttons [[:submit] [:cancel]])]
              [:div {:class "sandbar-form"}
-             (form-to [:post (cpath action) attrs]
+             (form-to [method (cpath action) attrs]
                       (form-header title buttons)
                       field-table
                       (form-footer buttons))]))
 
-(defmethod template :basic [_ action {:keys [buttons attrs]} field-div]
+(defmethod template :basic [_ method action {:keys [buttons attrs]} field-div]
            (let [buttons (or buttons [[:submit] [:reset]])]
              [:div {:class "sandbar-form"}
-              (form-to [:post (cpath action) attrs]
+              (form-to [method (cpath action) attrs]
                        (append-buttons-to-table field-div buttons))]))
 
-;;
-;; Macros to encapsulate common 'form' patters
-;;
+(defn- wrap-marshal-multi
+  [marshal bindings params type]
+  (let [multi (get-param params type)
+        multi (when multi
+                (set (map keyword (if (sequential? multi)
+                                    multi
+                                    [multi]))))]
+    (if multi
+      (fn [m] (-> m
+                  marshal
+                  (dissoc type)
+                  (marshal-multi bindings params multi type)))
+      marshal)))
 
-(defn form-routes [resource-uri add-form edit-form submit-fn]
-  (routes
-   (GET (str resource-uri "/:id") request (edit-form request))
-   (GET resource-uri request (add-form request))
-   (POST resource-uri
-         request
-         (submit-fn request))))
+(defn- build-marshal-function
+  "Build the default marshaling function. Removes all of the temporary fields."
+  [request bindings]
+  (fn [params]
+    (let [keys (map keyword (keys params))
+          marshal (fn [m] (dissoc m :submit :* :_method))
+          checkboxes (get-param params :_checkboxes)
+          checkboxes (when checkboxes
+                       (set (map keyword (if (sequential? checkboxes)
+                                           checkboxes
+                                           [checkboxes]))))
+          marshal (if checkboxes
+                    (fn [m] (-> m
+                                marshal
+                                (dissoc :_checkboxes)
+                                (marshal-checkboxes params
+                                                    checkboxes)))
+                    
+                    marshal)
+          marshal (wrap-marshal-multi marshal
+                                      (partial make-bindings
+                                               :multi-checkbox
+                                               request
+                                               bindings)
+                                      params
+                                      :_multi-checkboxes)
+          marshal (wrap-marshal-multi marshal
+                                      (partial make-bindings
+                                               :select
+                                               request
+                                               bindings)
+                                      params
+                                      :_multi-selects)
+          marshal (wrap-marshal-multi marshal
+                                      (partial make-bindings
+                                               :select
+                                               request
+                                               bindings)
+                                      params
+                                      :_selects)]
+      (-> (get-params keys params)
+          marshal
+          clean-form-input))))
 
-(defn- field-def
-  ([type name]
-     (field-def type nil name nil))
-  ([type props name attrs]
-     (cond (nil? props) (list type name)
-           (empty? attrs) (list type props name)
-           :else (list type props name attrs))))
+(defn- submit-form
+  "Handle a form post or put request."
+  [request name validator options]
+  (let [{:keys [on-success on-cancel bindings]} options
+        {:keys [params]} request
+        bindings (or bindings {})
+        on-success (or on-success (constantly "/"))
+        on-cancel (or on-cancel "/")
+        marshal (build-marshal-function request bindings)]
+    (redirect
+     (replace-params (:route-params request)
+      (if (form-cancelled? params)
+        on-cancel
+        (let [form-data (marshal params)
+              failure (get (-> request :headers) "referer")]
+          (do (println "marshal:")
+              (pretty/pprint form-data)
+              (println))
+          (if-valid validator form-data
+                    on-success
+                    (store-errors-and-redirect name failure))))))))
 
-(defn- expand-field
-  ([type props fields attrs]
-     (cond (= (name type) "multi-checkbox")
-           [(apply list type props fields)]
-           (contains? #{"select" "multi-select"} (name type))
-           [(apply list type props (concat fields [attrs]))]
-           (> (count fields) 1) (map #(field-def type props % attrs) fields)
-           :else [(field-def type props (first fields) attrs)]))
-  ([type props fields attrs required]
-     (map #(concat % [required]) (expand-field type props fields attrs))))
+(defn- set-required
+  "Use the provided validator to set which fields are required."
+  [fields validator]
+  (let [required (set (keys (validation-errors (validator {}))))]
+    (vec (map #(if (contains? required (:field-name %))
+                 (assoc % :required true)
+                 %)
+              fields))))
 
-(defn- expand [required props fields]
-  (vec (apply concat
-              (map #(let [t (first %)
-                          r (rest %)
-                          [props r] (let [first-arg (first r)]
-                                      (if (or (map? first-arg)
-                                              (string? first-arg))
-                                        [first-arg (rest r)]
-                                        [props r]))
-                          [f a] (if (map? (last r))
-                                  [(butlast r) (last r)]
-                                  [r {}])]
-                      (cond (= (name t) "hidden")
-                            [(field-def t (last %))]
-                            (contains? #{"checkbox" "multi-checkbox"} (name t))
-                            (expand-field t props f a)
-                            :else (expand-field t props f a required)))
-                   fields))))
+(defn- actualize-html
+  "The html value for each field can either be an html data structure or a
+  function of the request which generates that structure. This function will
+  ensure that all such functions have been called and that all html values
+  are generated."
+  [fields request bindings properties]
+  (vec (map #(let [html (:html %)
+                   html (if (fn? html)
+                          (html request bindings properties)
+                          html)]
+               (assoc % :html html))
+            fields)))
 
-(defmacro field-list [validator properties & fields]
-  (let [v- (gensym "v_")
-        expanded (expand v- properties fields)]
-    `(let [~v- (required-fields ~validator)]
-       ~expanded)))
+(defn- show-form
+  "Handle a form get request."
+  [request name form-data validator options]
+  (let [{:keys [load bindings defaults buttons title layout fields style
+                properties create-method update-method create-action
+                update-action]}
+        options
+        {:keys [params uri]} request
+        bindings (or bindings {})
+        properties (or properties {})
+        load (or load (constantly nil))
+        defaults (if defaults
+                   (cond (map? defaults) defaults
+                         (fn? defaults) (defaults request)
+                         :else {})
+                   {})
+        route-params (:route-params request)
+        id (get route-params "id")
+        form-data (cond id (or form-data (load id))
+                        defaults defaults
+                        :else {})
+        buttons (if buttons
+                  {:buttons buttons}
+                  {:buttons [[:submit] [:cancel]]})
+        attrs (merge buttons
+                     (when title {:title title}))
+        layout (or layout [1])
+        fields (-> (cond (vector? fields) fields
+                         (fn? fields) (fields request form-data))
+                   (set-required validator)
+                   (actualize-html request bindings properties))
+        style (or style :default)
+        update-action (if (fn? update-action)
+                        (update-action request)
+                        update-action)
+        create-action (if (fn? create-action)
+                        (create-action request)
+                        create-action)
+        method (cond (and id update-method) update-method
+                     create-method create-method
+                     :else :post)
+        action (replace-params route-params
+                (cond (and id update-action) update-action
+                      create-action create-action
+                      :else uri))]
+    (template style method action attrs
+              (form-layout-grid layout
+                                name
+                                fields
+                                request
+                                form-data
+                                bindings
+                                properties))))
 
-(defn- categorize-fields [fields]
-  (reduce (fn [m next]
-            (let [type (name (first next))
-                  r (rest next)]
-              (cond (= type "multi-checkbox")
-                    (assoc m :multi-checkbox (conj (:multi m) r))
-                    (= type "multi-select")
-                    (assoc m :multi-select (conj (:multi m) r))
-                    (= type "checkbox")
-                    (assoc m :yes-no (concat (:yes-no m)
-                                             (filter keyword? r)))
-                    :else
-                    (assoc m :default (concat (:default m)
-                                              (filter keyword? r))))))
-          {}
-          fields))
+(defn make-form
+  "Create a form handler function. The resulting function is a function of the
+  request and optionally the form data. All options have reasonable default
+  values.
 
-(defn- build-marshal-chain [p fields]
-  (let [categorized-fields (categorize-fields fields)
-        chain [(list `get-params (vec (:default categorized-fields)) p)]
-        chain (if-let [yes-no (:yes-no categorized-fields)]
-                (conj chain (list `get-yes-no-fields p (set yes-no)))
-                chain)
-        chain (if-let [multi (:multi-checkbox categorized-fields)]
-                (apply conj chain
-                       (map #(apply list `get-multi-checkbox p %) multi))
-                chain)
-        chain (if-let [multi (:multi-select categorized-fields)]
-                (apply conj chain
-                       (map #(apply list `get-multi-select p %) multi))
-                chain)]
-    (conj chain `clean-form-input)))
+  Any useful form should include:
 
-(defn- uri-segments [uri]
-  (let [segs (drop 1 (string/split uri #"/"))
-        small (apply str (interleave (repeat "/") (butlast segs)))
-        large (apply str (interleave (repeat "/") segs))]
-    {:small small
-     :large large}))
+  fields:     Either a vector of fields or a function of the request and form
+              data which returns a vector of fields. Defaults to nil.
+  load:       A function of the id that will load the form data. id is
+              (get (:route-params request) 'id'). Defaults to a function that
+              returns nil.
+  on-success: A function of the validated form data which returns the uri to be
+              redirected to. Defaults to (constantly \"/\").
+  on-cancel:  The uri to be redirected to when the cancel button in pushed.
+              Defaults to \"/\".
+  bindings:   When using multi-select, multi-checkbox and select fields you
+              need to configure the data source for each field. bindings is a
+              map of field names to data sources where a data source is defined
+              as:
+              {:value name :visible identity :source (fn [request] ...)
+               :data identity}
+              source can be a function or a literal list. data will return
+              the native representation. value and visible are what appear in
+              the html.
 
-(defn- ajax-route-pair
-  [segments ajax-route function & args]
-  (let [request (gensym "request_")
-        function-call (apply list function request args)]
-    [`(GET ~(str (:small segments) "/" ajax-route) ~request
-           ~function-call)
-     `(GET ~(str (:large segments) "/" ajax-route) ~request
-           ~function-call)]))
+  For makeing RESTful forms use:
 
-(defn- ajax-routes [ajax uri default]
-  (let [segs (uri-segments uri)
-        route-forms
-        (if-let [[function ajax-route] (:validator ajax)]
-          (ajax-route-pair segs ajax-route function default)
-          [])
-        route-forms
-        (if-let [functions (:functions ajax)]
-          (concat route-forms
-                  (mapcat #(ajax-route-pair segs % %) functions))
-          route-forms)]
-    route-forms))
+  create-method: The request method to use when creating a new resource.
+  update-method: The request method to use when updating a resource.
+  create-action: The uri to use when creating a new resource. May be a string
+                 or a function of the request.
+  update-action: The uri to use when updating a resource. May be a string or
+                 a function of the request.
 
-(defn- form-routes-function
-  ([resource uri view submit default]
-     (form-routes-function resource uri view submit default nil))
-  ([resource uri view submit default ajax]
-     (let [layout-sym (gensym "layout_")
-           form-routes
-           `(form-routes ~uri
-                         (fn [request#]
-                           (~layout-sym request#
-                                        (~view :add request# ~default)))
-                         (fn [request#]
-                           (~layout-sym request#
-                                        (~view :edit request# ~default)))
-                         (fn [request#]
-                           (~submit request# ~default)))
-           all-form-routes (if ajax
-                             (let [ajax-routes (ajax-routes ajax uri default)]
-                               `(routes
-                                 ~@ajax-routes
-                                 ~form-routes))
-                             form-routes)]
-       `(defn ~resource [~layout-sym]
-          ~all-form-routes))))
+  Optionally you may often use:
 
-(defn- ns-sym [s]
-  (symbol (str *ns*) (str s)))
+  properties: A map which will be used to look up field labels to be displayed
+              on the form.
+  validator:  A function of a map which returns a validated map. Defaults to
+              identity.
+  defaults:   A map of the default form values or a function of the request
+              which returns a map of default values.
+  buttons:    A sequence of form buttons. Defaults to [[:submit] [:cancel]]
+  layout:     A vector which indicates the field layout. Defaults to [1].
 
-(defn- ns-gensym [s]
-  (ns-sym (gensym s)))
+  On rare occations you will need:
 
-(defn- form-symbol-map
-  "Produce common symbols that are used by both defform and extend-form.
-   This function memoized below to ensure that the the symbols which are
-   produced are always the same for a given resource."
-  [resource]
-  {:resource-id (keyword (name resource))
-   :properties-def (ns-gensym "properties_")
-   :get-fields (ns-gensym "get_fields_")
-   :atom (ns-gensym "types_")
-   :marshal (ns-gensym "marshal_")
-   :get-validator (ns-gensym "get_validator_")
-   :view (ns-gensym "view_")
-   :submit (ns-gensym "submit_")
-   :get-title (ns-gensym "get_title_")
-   :get-buttons (ns-gensym "get_buttons_")
-   :get-post (ns-gensym "get_post_")})
+  style:      The form style. Defaults to :default but could also be :over-under
+  title:      A function of the request and form data which returns the
+              current form title. May also be a String. It is used when
+              the style requires a title and returned in the resulting
+              response map.
 
-(def form-symbol-map-memo (memoize form-symbol-map))
+  Example usage:
 
-(defn sym->var->sym [v]
-  (let [{:keys [ns name]} (meta (resolve v))]
-    (symbol (str ns) (str name))))
+  (def names-form
+     (make-form :names-form
+       :fields [(textfield :my-name :label \"My Name\")]
+       :load #(fetch %)
+       :on-success #(do (save %)
+                        \"/landing/page/\")
+       :on-cancel \"/landing/page\"
+       :create-action \"/names\"
+       :update-action \"/names/:id\"
+       :update-method :put))
 
-(defn- ajax-validator-function [function-name type marshal get-validator]
-  `(defn ~function-name [request# default-type#]
-     (let [params# (:params request#)
-           form-type# (~type :marshal
-                             request#
-                             {}
-                             default-type#)
-           form-data# (~marshal form-type# params#)
-           validator# (~get-validator form-type#)
-           errors# (validation-errors (validator# form-data#))]
-       (json/json-str (if errors#
-                        {:status :fail :errors errors#}
-                        {:status :pass})))))
+  (defroutes my-routes
+    (GET \"/names/new\" request (layout (names-form request)))
+    (POST \"/names\" request (simple-form request))
+    (GET \"/names/:id/edit\" request (layout (simple-form request)))
+    (PUT \"/names/:id\" request (simple-form request)))"
+  [name & {:keys [validator title] :as options}]
+  (fn [request & [form-data]]
+    (let [{:keys [request-method]} request
+          title (cond (string? title) title
+                      (fn? title) (title request)
+                      :else nil)
+          options (assoc options :title title)
+          validator (or validator identity)
+          response (if (some #{request-method} [:post :put])
+                     (submit-form request name validator options)
+                     (show-form request name form-data validator options))]
+      (if (map? response)
+        response
+        {:title title
+         :body response}))))
 
-(defmacro defform
-  "Define a form and produce a function that will generate the form's routes."
-  [resource uri & {:keys [fields on-cancel on-success load]
-                   :as options}]
-  (let [{:keys [resource-id properties-def get-fields atom marshal
-                get-validator view submit get-title get-buttons
-                get-post]}
-        (form-symbol-map-memo (ns-sym resource))
-        type-fn-sym (gensym "type_")
-        ajax-validator (gensym "ajax_validator_")
-        params- (gensym "params_")
-        marshal-chain (build-marshal-chain params- fields)
-        ;; multimethods
-        dispatch-sym (gensym "dispatch_")
-        get-layout-sym (gensym "get_layout_")
-        ;; semi-optional
-        on-cancel (or on-cancel uri)
-        on-success (or on-success `(fn [m#] ~uri))
-        load (or load `(fn [id#] {}))
-        ;; optional
-        attrs (or (:attrs options) {})
-        style (or (:style options) :default)
-        validator (or (:validator options) `identity)
-        properties (or (:properties options) {})
-        title (or (:title options) `(fn [t#] (or (~resource-id ~properties)
-                                                 "Form")))
-        buttons (or (:buttons options) [[:submit "Submit"] [:cancel "Cancel"]])
-        buttons (if (= (second (reverse buttons)) :labels)
-                  buttons
-                  (vec (concat buttons [:labels properties])))
-        field-layout (or (:field-layout options) [1])
-        default-data (or (:defaults options) {})
-        marshal-fn (if-let [user-marshal (:marshal options)]
-                     `(~user-marshal (fn [~params-]
-                                       (-> ~@marshal-chain))
-                                     ~params-)
-                     `(-> ~@marshal-chain))
-        forms
-        `(do
-           (def ~properties-def ~properties)
-           (def ~atom (atom '()))
-           (defn ~type-fn-sym [action# request# form-data# default#]
-             (or (first (filter (fn [x#] (not (= x# :default)))
-                                (map (fn [f#] (f# action# request# form-data#))
-                                     @~atom)))
-                 default#))
-           (defn ~dispatch-sym [& args#] (first args#))
-           (defmulti ~get-fields ~dispatch-sym)
-           (defmulti ~marshal ~dispatch-sym)
-           (defmulti ~get-layout-sym ~dispatch-sym)
-           (defmulti ~get-validator ~dispatch-sym)
-           (defmulti ~get-title ~dispatch-sym)
-           (defmulti ~get-buttons ~dispatch-sym)
-           (defmulti ~get-post ~dispatch-sym)
-           (defmethod ~get-fields :default [form-type#]
-                      (field-list ~validator ~properties-def
-                                  ~@fields))
-           (defmethod ~marshal :default [form-type# ~params-]
-                      ~marshal-fn)
-           (defmethod ~get-layout-sym :default [form-type#]
-                      ~field-layout)
-           (defmethod ~get-validator :default [form-type#]
-                      ~validator)
-           (defmethod ~get-title :default [form-type# type#]
-                      (~title type#))
-           (defmethod ~get-buttons :default [form-type#]
-                      ~buttons)
-           (defmethod ~get-post :default [form-type# uri#]
-                      uri#)
-           (defn ~submit [request# default-type#]
-             (let [params# (:params request#)
-                   route-params# (:route-params request#)
-                   uri# (:uri request#)
-                   form-type# (~type-fn-sym :marshal request# {} default-type#)
-                   {cancel-val# :cancel and-new-val# :save-and-new}
-                   (special-button-text (~get-buttons form-type#))]
-               (redirect
-                (replace-params
-                 route-params#
-                 (if (form-cancelled? params# cancel-val#)
-                   ~on-cancel
-                   (let [form-data# (merge (keyword-keys route-params#)
-                                           (~marshal form-type# params#))
-                         failure# (get (:headers request#) "referer")
-                         submit# (get-param params# :submit)
-                         form-type# (~type-fn-sym :validate
-                                                  request#
-                                                  form-data#
-                                                  default-type#)]
-                     (if-valid (~get-validator form-type#) form-data#
-                               (fn [m#]
-                                 (let [s# (~on-success m#)]
-                                   (if (and and-new-val# (= submit# and-new-val#))
-                                     uri#
-                                     s#)))
-                               (store-errors-and-redirect ~resource-id
-                                                          failure#))))))))
-           (defn ~view [type# request# default-type#]
-             (let [params# (:params request#)
-                   route-params# (:route-params request#)
-                   form-data# (case type#
-                                    :edit (let [id# (get-param params# :id)]
-                                            (~load id#))
-                                    (if (map? ~default-data)
-                                      ~default-data
-                                      (~default-data request#)))
-                   form-type# (~type-fn-sym type#
-                                            request#
-                                            form-data#
-                                            default-type#)]
-               (template ~style
-                         (~get-post form-type# (replace-params route-params# ~uri))
-                         {:title (~get-title form-type# type#)
-                          :buttons (~get-buttons form-type#)
-                          :attrs ~attrs}
-                         (form-layout-grid (~get-layout-sym form-type#)
-                                           ~resource-id
-                                           (~get-fields form-type#)
-                                           request#
-                                           form-data#)))))
-        forms (if (:ajax-validation-at options)
-                (concat forms
-                        [(ajax-validator-function ajax-validator
-                                                   type-fn-sym
-                                                   marshal
-                                                   get-validator)])
-                forms) 
-       forms (let [base-args [resource uri view submit resource-id]
-                    ajax-args (if-let [ajax-validation-uri
-                                       (:ajax-validation-at options)]
-                                {:validator [ajax-validator
-                                             ajax-validation-uri]}
-                                {})
-                    ajax-args (if-let [ajax-functions (:ajax options)]
-                                (merge ajax-args {:functions ajax-functions})
-                                ajax-args)
-                    args (concat base-args [ajax-args])]
-                (concat forms
-                        [(apply form-routes-function args)]))]
-    forms))
-
-(defmacro extend-form
-  "Extend a previously defined form. The form can be extended either
-   statically or dynamically."
-  [resource & {:keys [with] :as options}]
-  (let [fields (or (:fields options) [])
-        ns-resource (str)
-        {:keys [resource-id properties-def get-fields atom marshal
-                get-validator view submit get-title get-buttons
-                get-post]}
-        (form-symbol-map-memo (sym->var->sym resource))
-        with-id (keyword (name with)) 
-        ;; optional
-        when (if-let [w (:when options)]
-               `(fn [action# request# form-data#]
-                  (if (~w action# request# form-data#)
-                    ~with-id
-                    ~resource-id))
-               `(fn [& args#] :default))
-        validator (or (:validator options) `identity)
-        params- (gensym "params_")
-        marshal-chain (build-marshal-chain params- fields)
-        forms
-        `(do
-           (swap! ~atom conj ~when)
-           (defmethod ~get-fields ~with-id [form-type#]
-                      (concat (~get-fields ~resource-id)
-                              (field-list ~validator ~properties-def
-                                          ~@fields)))
-           (defmethod ~marshal ~with-id [form-type# ~params-]
-                      (merge (~marshal ~resource-id ~params-)
-                             (-> ~@marshal-chain)))
-           (defmethod ~get-validator ~with-id [form-type#]
-                      (let [v# ~validator]
-                        (fn [m#]
-                          (-> ((~get-validator ~resource-id) m#)
-                              v#)))))
-        forms (if-let [at (:at options)]
-                (concat forms
-                        [(form-routes-function with at view submit with-id)
-                         `(defmethod ~get-post ~with-id [form-type#]
-                                     ~at)])
-                forms)
-        forms (if-let [title (:title options)]
-                (concat forms
-                        [`(defmethod ~get-title ~with-id [form-type# type#]
-                                     (~title type#))])
-                forms)
-        forms (if-let [buttons (:buttons options)]
-                (concat forms
-                        [`(defmethod ~get-buttons ~with-id [form-type#]
-                                     ~buttons)])
-                forms)]
-    forms))
-
+(defmacro defform [name & options]
+  "Define a form handler function. The name may optionally be
+  followed by a doc-string and metadata map. See make-form for details."
+  (let [[name options] (name-with-attributes name options)]
+    `(def ~name (make-form ~(keyword name) ~@options))))

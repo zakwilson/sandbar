@@ -1,4 +1,4 @@
-(ns sandbar.dev.views
+(ns sandbar.examples.views
   "Common views which are used by all of the form examples."
   (:use [hiccup.core :only [html]]
         [hiccup.page-helpers :only [doctype link-to]]

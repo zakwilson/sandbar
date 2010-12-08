@@ -1,4 +1,4 @@
-(ns sandbar.dev.complex
+(ns sandbar.examples.complex
   "Create a complex form using sandbar.forms. This demo shows most of
    the options that are available for defform."
   (:use [ring.adapter.jetty :only [run-jetty]]

@@ -6,16 +6,18 @@
 ;; the terms of this license.
 ;; You must not remove this notice, or any other, from this software.
 
-(ns sandbar.test-form-authentication
-  (:use (clojure test)
-        (ring.util [response :only (redirect)])
-        (sandbar core
-                 stateful-session
-                 auth
-                 test-fixtures
-                 form-authentication
-                 [test :only (t)])
-        #_(sandbar.dev user-manager)))
+(ns sandbar.test.form-authentication
+  (:use [clojure.test :only [deftest testing is]]
+        [sandbar.form-authentication]
+        [ring.util.response :only [redirect]]
+        [sandbar.core :only [app-context]]
+        [sandbar.stateful-session :only [sandbar-session
+                                         sandbar-flash]]
+        [sandbar.auth :only [with-security
+                             hash-password
+                             access-error
+                             authentication-error]]
+        [sandbar.fixtures :only [fixture-security-config]]))
 
 (defn test-login-load-fn
   ([k] (test-login-load-fn k {} {}))
@@ -54,18 +56,18 @@
 
 #_(deftest test-authenticate!
   (let [auth-source (form-authentication-adapter test-login-load-fn {})]
-    (t "authenticate!"
+    (testing "authenticate!"
        (binding [sandbar-session (atom {})
                  sandbar-flash (atom {})]
-         (t "with missing username"
+         (testing "with missing username"
             (is (= (authenticate! auth-source
                                   {"password" "x"})
                    (redirect "login"))))
-        (t "with missing password"
+        (testing "with missing password"
            (is (= (authenticate! auth-source
                                  {"username" "u"})
                   (redirect "login")))))
-      (t "with correct password"
+      (testing "with correct password"
          (binding [sandbar-flash (atom {})
                    sandbar-session (atom {:auth-redirect-uri "/test"})]
            (let [result (authenticate! auth-source
@@ -75,7 +77,7 @@
              (is (= @sandbar-session
                     {:current-user {:name "u"
                                     :roles #{:admin}}})))))
-      (t "with incorrect password"
+      (testing "with incorrect password"
          (binding [sandbar-flash (atom {})
                    sandbar-session (atom {:auth-redirect-uri "/test"})]
            (let [result (authenticate! auth-source
@@ -88,48 +90,48 @@
 (deftest test-with-security-with-form-auth
   (binding [sandbar-session (atom {})
             sandbar-flash (atom {})]
-    (t "with security using form authentication"
-       (t "url config"
+    (testing "with security using form authentication"
+       (testing "url config"
           (let [with-security (partial with-security
                                        :uri
                                        fixture-security-config)]
             (binding [app-context (atom "")]
-            (t "redirect to login when user auth required and user is nil"
+            (testing "redirect to login when user auth required and user is nil"
                (let [result ((with-security form-authentication)
                              {:uri "/admin/page"})]
                  (is (= result
                         (redirect "/login")))
                  (is (= (:auth-redirect-uri @sandbar-session)
                         "/admin/page"))))
-            (t "redirect to login with a uri-prefix"
+            (testing "redirect to login with a uri-prefix"
                (is (= ((with-security form-authentication "/prefix")
                        {:uri "/admin/page"})
                       (redirect "/prefix/login"))))
-            (t "allow access when auth is not required"
+            (testing "allow access when auth is not required"
                (is (= ((with-security form-authentication)
                        {:uri "/test.css"})
                       "/test.css")))
             (binding [sandbar-flash (atom {})
                       sandbar-session (atom {:current-user {:name "testuser"
                                                             :roles #{:user}}})]
-              (t "redirect to permission denied when valid user without role"
+              (testing "redirect to permission denied when valid user without role"
                  (is (= ((with-security form-authentication)
                          {:uri "/admin/page"})
                         (redirect "/permission-denied"))))
-              (t "allow access when user is in correct role"
+              (testing "allow access when user is in correct role"
                  (is (= ((with-security form-authentication)
                          {:uri "/some/page"})
                         "/some/page")))))))
-      (t "and NO url config"
+      (testing "and NO url config"
          (binding [app-context (atom "")]
-           (t "redirect to permission denied when access exception is thrown"
+           (testing "redirect to permission denied when access exception is thrown"
               (is (= ((with-security
                         (fn [r] (access-error "testing with-security"))
                         []
                         form-authentication)
                       {:uri "/x"})
                      (redirect "/permission-denied"))))
-           (t "redirect to login when authorization exception is thrown"
+           (testing "redirect to login when authorization exception is thrown"
               (is (= ((with-security
                         (fn [r] (authentication-error "testing with-security"))
                         []
