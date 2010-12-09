@@ -10,7 +10,7 @@
   "Forms and form layouts."
   (:use [clojure.contrib.def :only [name-with-attributes]]
         [ring.util.response :only [redirect]]
-        [compojure.core :only [routes GET POST]]
+        [compojure.core :only [routes GET POST PUT]]
         [sandbar.stateful-session :only [flash-put!
                                          flash-get]]
         [sandbar.core :only [cpath get-param property-lookup]]
