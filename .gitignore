@@ -3,6 +3,7 @@
 pom.xml
 .DS_Store
 src/examples
+public/js
 
 # ignore output
 out/
