@@ -1,0 +1,40 @@
+table.list {
+   border: 1px solid #ccc;
+   margin-top: 10px;
+   margin-size: 10px;
+   font-size: 11px;
+}
+
+table.list th {
+   font-family: Arial, Helvetica, sans-serif;
+   background: #EDECEB;
+   color: #434A4C;
+   padding: 6px;
+   border: 1px solid #ccc;
+   font-size: 11px;
+   text-align: left;
+}
+
+table.list th a, table.list th a:visited {
+   background-color: transparent;
+   color: #434A4C;
+   text-decoration: none;
+}
+
+table.list th img {
+   vertical-align: middle;
+}
+
+table.list td {
+   vertical-align: top;
+   padding: 3px
+}
+
+tr.odd {
+   background: #e8ecf5;
+   border-top: 1px solid #C0C0C0;
+}
+
+tr.even {
+   background: #ffffff;
+}
