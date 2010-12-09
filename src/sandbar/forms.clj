@@ -95,9 +95,11 @@
                 label)
         req (cond (keyword? req) req
                   (contains? (set req) key) :required
-                  :else :optional)]
-    [:div {:class "field-label"} label
-     (if (= req :required) [:span {:class "required"} "*"] "")]))
+                  :else :optional)
+        div [:div {:class "field-label"} label]]
+    (if (= req :required)
+      (vec (conj div [:span {:class "required"} "*"]))
+      div)))
 
 (defn hidden
   "Create a hidden form field."
@@ -106,7 +108,9 @@
      {:type :hidden
       :label ""
       :field-name field-name
-      :html [:input {:type "hidden" :name (name field-name) :value value}]}))
+      :html [:input {:type "hidden"
+                     :name (name field-name)
+                     :value (or value "")}]}))
 
 #_(defn htmlfield
   ([fname content]
@@ -279,7 +283,8 @@
   [field-name & {:keys [title source value visible required]
                  :as options}]
   (let [options (merge {:multiple true :size 5} options)]
-    (-> (apply select field-name (flatten (seq options)))
+    (-> (apply select field-name (interleave (keys options)
+                                             (vals options)))
         (assoc :type :multi-select))))
 
 (defn wrap-checkboxes-in-group [coll]
@@ -1031,3 +1036,32 @@
   followed by a doc-string and metadata map. See make-form for details."
   (let [[name options] (name-with-attributes name options)]
     `(def ~name (make-form ~(keyword name) ~@options))))
+
+(defn make-rest-form
+  [name & {:keys [resource page-layout] :as options}]
+  (let [page-layout (or page-layout identity)
+        create-action resource
+        update-action (str resource "/:id")
+        update-method :put
+        new-action (str resource "/new")
+        edit-action (str resource "/:id/edit")
+        options (-> options
+                    (dissoc :resource :page-layout)
+                    (merge {:create-action create-action
+                            :update-action update-action
+                            :update-method update-method}))
+        form-handler (apply make-form name (interleave (keys options)
+                                                       (vals options)))]
+    (routes
+     (GET new-action request (page-layout (form-handler request)))
+     (POST resource request (form-handler request))
+     (GET edit-action request (page-layout (form-handler request)))
+     (PUT update-action request (form-handler request)))))
+
+(defmacro defrestform [name & options]
+  "Define a form handler function wrapped in a RESTful routing function. The
+  name may optionally be followed by a doc-string and metadata map. See
+  make-rest-form for details."
+  (let [[name options] (name-with-attributes name options)]
+    `(def ~name (make-rest-form ~(keyword name) ~@options))))
+

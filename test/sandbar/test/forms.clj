@@ -7,7 +7,7 @@
 ;; You must not remove this notice, or any other, from this software.
 
 (ns sandbar.test.forms
-  (:use [clojure.test :only [deftest testing]]
+  (:use [clojure.test :only [deftest testing is]]
         [sandbar.forms]
         [sandbar.stateful-session :only []]))
 
@@ -15,7 +15,7 @@
 ;; Fixtures
 ;;
 
-(defn create-test-multi-checkbox [fname coll]
+#_(defn create-test-multi-checkbox [fname coll]
   {:type :multi-checkbox
    :field-name fname
    :label ""
@@ -31,33 +31,33 @@
            (partition 2 coll)))
    :value-fn :id})
 
-(defn button-row [buttons]
+#_(defn button-row [buttons]
   [:tr 
    [:td {:colspan 1}
     [:div.buttons
      (display-buttons "basic" buttons)]]])
 
-(defn test-form-opt-label [field-name]
+#_(defn test-form-opt-label [field-name]
   [:div {:class "field-label"} field-name ""])
 
-(defn test-form-req-label [field-name]
+#_(defn test-form-req-label [field-name]
   [:div {:class "field-label"} field-name
    [:span {:class "required"} "*"]])
 
-(defn form-textfield-fixture [field-name value]
+#_(defn form-textfield-fixture [field-name value]
   [:input {:size 35 :type "Text" :name field-name :value value
            :class "textfield"}])
 
-(defn form-hidden-fixture [field-name value]
+#_(defn form-hidden-fixture [field-name value]
   [:input {:type "hidden" :name field-name :value value}])
 
-(defn form-password-fixture [field-name value]
+#_(defn form-password-fixture [field-name value]
   [:input {:size 35 :type "Password" :name field-name :value value
            :class "textfield"}])
 
-(defmulti field-fixture (fn [& args] (first args)))
+#_(defmulti field-fixture (fn [& args] (first args)))
 
-(defmethod field-fixture :textfield [_ label name & {:keys [value flags]}]
+#_(defmethod field-fixture :textfield [_ label name & {:keys [value flags]}]
            (let [field-value (or value "")]
              [:div.sandbar-field
               (if (contains? flags :required)
@@ -66,27 +66,27 @@
               [:div.error-message {:style "display:none;"}]
               (form-textfield-fixture name field-value)]))
 
-(defn form-checkbox-fixture [field-name value]
+#_(defn form-checkbox-fixture [field-name value]
   [:input {:type "checkbox" :name field-name :value "checkbox-true"}])
 
-(defn form-checkbox-label-fixture [title]
+#_(defn form-checkbox-label-fixture [title]
   [:span {:class "field-label"} title])
 
-(defn test-form-multi-checkbox [field-name value]
+#_(defn test-form-multi-checkbox [field-name value]
   [:div [:input {:type "Text", :name field-name, :value value}]])
 
-(defn test-form-textarea [field-name value]
+#_(defn test-form-textarea [field-name value]
   (if (empty? value)
     [:textarea {:name field-name}]
     [:textarea {:name field-name} value]))
 
-(def td-std-opts {:valign "top"})
+#_(def td-std-opts {:valign "top"})
 
 ;;
 ;; Utilities
 ;;
 
-#_(deftest get-params-test
+(deftest get-params-test
   (is (= (get-params [:a :b] {"a" "a" "b" "b"})
          {:a "a" :b "b"}))
   (is (= (get-params [:a :b] {:a "a" :b "b"})
@@ -99,7 +99,7 @@
   (is (= (get-params [:a :b] {:a ["1" "2" "3.5"] :b ["a" "2" "4.5t"]})
          {:a [1 2 3.5] :b ["a" 2 "4.5t"]})))
 
-#_(deftest clean-form-input-test
+(deftest clean-form-input-test
   (is (= (clean-form-input {:id "" :name "" :age 10})
          {:name nil :age 10}))
   (is (= (meta (clean-form-input
@@ -110,6 +110,24 @@
 ;; Form Elements
 ;;
 
+(deftest field-label-test
+  (let [req [:span {:class "required"} "*"]
+        expected #(concat [:div {:class "field-label"}] %)]
+    (is (= (field-label "a" :b :optional)
+           (expected ["a"])))
+    (is (= (field-label {:b "c"} :b :optional)
+           (expected ["c"])))
+    (is (= (field-label {:a "c"} :b :optional)
+           (expected ["b"])))
+    (is (= (field-label "a" :b :required)
+           (expected ["a" req])))))
+
+(deftest hidden-test
+  (is (= (:html (hidden :a))
+         [:input {:type "hidden" :name "a" :value ""}]))
+  (is (= (:html (hidden :a "x"))
+         [:input {:type "hidden" :name "a" :value "x"}])))
+
 #_(deftest textfield-test
   (are [args _ e-label exp-name exp-value]
        (= (apply textfield args)
@@ -117,7 +135,7 @@
            :label e-label
            :field-name :name
            :html (form-textfield-fixture exp-name exp-value)})
-
+       
        ["f1" :name] :=> (test-form-opt-label "f1") "name" ""
 
        ["f1" :name :required] :=> (test-form-req-label "f1") "name" ""

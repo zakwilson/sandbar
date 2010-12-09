@@ -1,8 +1,9 @@
-lein radagast sandbar.auth \
-              sandbar.core \
-              sandbar.form-authentication \
-              sandbar.forms \
-              sandbar.stateful-session \
-              sandbar.tables \
-              sandbar.util \
-              sandbar.validation
+lein radagast sandbar.test.auth \
+              sandbar.test.core \
+              sandbar.test.form-authentication \
+              sandbar.test.forms \
+              sandbar.test.stateful-session \
+              sandbar.test.tables \
+              sandbar.test.util \
+              sandbar.test.validation
+
