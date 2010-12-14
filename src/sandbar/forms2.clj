@@ -38,17 +38,16 @@
           for that field. This will allow all labels to be placed into a
           single map and will also be used for internationalization."
   (:require [hiccup.core :as html]
-            [clojure.string :as string]))
+            [clojure.string :as string]
+            [sandbar.stateful-session :as session]))
 
-;; See sandbar.forms2.example-basic or usage.
+;; See sandbar.forms2.example-basic for usage.
 
 ;; ==============
 ;; Form protocols
 ;; ==============
 ;; This is not the complete set of form protocols. I have an idea of
-;; what they might be and I will be adding them here as I need to start
-;; implementing them.
-
+;; what they might be and I will be adding them here as they are implemented.
 
 (defprotocol Field
   "The format of the data and env arguments is described above."
@@ -56,13 +55,43 @@
   (render-field [this data env] "Return renderd HTML for this field"))
 
 (defprotocol Form
+  "Render form HTML."
   (render-form [this request data env] "Return rendered HTML for this form"))
 
 (defprotocol Layout
   "Layout form fields and render as HTML. The format of the data and env
   arguments is described above."
-  (render-layout [this request fields data env]
+  (render-layout [this request fields buttons data env]
                  "Return rendered HTML for all form fields"))
+
+(defprotocol Button
+  "Render a form button."
+  (render-button [this] "Return rendered HTML for this button"))
+
+(defprotocol Defaults
+  "Get the default data for a form."
+  (default-form-data [this request] "Return map of default form data"))
+
+(defprotocol DataSource
+  "Load data for a form from an external data source."
+  (load-form-data [this request] "Return map of form data"))
+
+(defprotocol TempStorage
+  "Store information that will be needed for multiple requests."
+  (temp-put! [this key data])
+  (temp-get [this key]))
+  
+(defprotocol Control
+  "Add hidden control fields during the get request and then determine if the
+  form was cancel or double posted when the form is submitted. May also store
+  control information in the session."
+  (add-control [this request fields] "Return a list of FormFields.")
+  (status [this request] "Return a Ring response or nil."))
+  
+(defprotocol FormView
+  "Process a complete form view request. Return a map with form information
+  to allow the form to be embedded in a page."
+  (view-form [this request] "Return a map of :title :body :errors."))
 
 ;; =======================
 ;; Default implementations
@@ -82,9 +111,9 @@
 
 (defmethod field-label :default
   [{:keys [label required]}]
-  (let [div [:div {:class "sandbar-field-label"} label]]
+  (let [div [:div {:class "field-label"} label]]
     (if required
-      (vec (conj div [:span {:class "sandbar-required"} "*"]))
+      (vec (conj div [:span {:class "required"} "*"]))
       div)))
 
 (defmulti form-field-cell
@@ -123,34 +152,75 @@
                                          attributes)]]
                   (html/html (form-field-cell (assoc d :html field-html))))))
 
+(defrecord SandbarButton [type label] Button
+  (render-button [this]
+                 (html/html [:input.sandbar-button
+                             {:type "submit"
+                              :value label
+                              :name (name type)}])))
+
+(defn button [type & {:keys [label] :as options}]
+  (let [label (or label (case type
+                              :save "Save"
+                              :cancel "Cancel"
+                              "Submit"))]
+    (SandbarButton. type label)))
+
 ;;
 ;; Form layout
 ;;
 
 (defrecord GridLayout [] Layout
-  (render-layout [this request fields data env]
-    (let [rendered-fields (map #(render-field % data env) fields)]
-      (html/html [:div rendered-fields]))))
+  (render-layout [this request fields buttons data env]
+    (let [rendered-fields (map #(render-field % data env) fields)
+          rendered-buttons (map #(render-button %) buttons)]
+      (html/html [:table
+                  [:tr
+                   [:td
+                    [:div rendered-fields]
+                    [:div.buttons
+                     [:span.basic-buttons rendered-buttons]]]]]))))
 
 ;;
 ;; Form
 ;;
 
-(defrecord SandbarForm [fields action-method layout attributes] Form
+(defrecord SandbarForm [fields buttons action-method layout attributes] Form
   (render-form [this request data env]
     (let [fields (if (fn? fields)
                    (fields request)
                    fields)
           [action method] (action-method request)
-          body (render-layout layout request fields data env)
+          body (render-layout layout request fields buttons data env)
           method-str (.toUpperCase (name method))]
       (html/html
-       (-> (if (contains? #{:get :post} method)
-             [:form (merge {:method method-str, :action action} attributes)]
-             [:form (merge {:method "POST", :action action} attributes)
-              [:input :type "hidden" :name "_method" :value method-str]])
-           (conj body)
-           (vec))))))
+       [:div.sandbar-form
+        (-> (if (contains? #{:get :post} method)
+              [:form (merge {:method method-str :action action} attributes)]
+              [:form (merge {:method "POST" :action action} attributes)
+               [:input :type "hidden" :name "_method" :value method-str]])
+            (conj body)
+            (vec))]))))
+
+;;
+;; Data
+;;
+
+(extend-protocol Defaults
+  clojure.lang.IFn
+  (default-form-data [this request] (this request))
+  clojure.lang.IPersistentMap
+  (default-form-data [this request] this))
+
+(extend-protocol DataSource
+  clojure.lang.IFn
+  (default-form-data [this request] (this request))
+  clojure.lang.IPersistentMap
+  (default-form-data [this request] this))
+
+(defrecord FlashStorage [] TempStorage
+  (temp-put! [this key data] (session/flash-put! key data))
+  (temp-get [this key] (session/flash-get key)))
 
 ;; ============
 ;; Constructors
@@ -192,11 +262,11 @@
 (defn form
   "Create a form..."
   [fields & {:keys [create-method update-method create-action
-                    update-action layout]
+                    update-action layout buttons]
              :as options}]
   (let [attributes (dissoc options
                            :create-method :update-method :create-action
-                           :update-action :layout)
+                           :update-action :layout :buttons)
         action-method
         (fn [request]
           (let [route-params (:route-params request)
@@ -214,5 +284,6 @@
              (cond (and id update-method) update-method
                    create-method create-method
                    :else :post)]))
-        layout (or layout (grid-layout))]
-    (SandbarForm. fields action-method layout attributes)))
+        layout (or layout (grid-layout))
+        buttons (or buttons [(button :submit) (button :cancel)])]
+    (SandbarForm. fields buttons action-method layout attributes)))
