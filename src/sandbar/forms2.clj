@@ -54,15 +54,17 @@
   (field-map [this data env] "Return a map of field data")
   (render-field [this data env] "Return renderd HTML for this field"))
 
-(defprotocol Form
-  "Render form HTML."
-  (render-form [this request data env] "Return rendered HTML for this form"))
-
 (defprotocol Layout
   "Layout form fields and render as HTML. The format of the data and env
-  arguments is described above."
+  arguments is described above. This function returns a map with a key :body
+  where the value is the rendered field HTML. Depending on the implementation
+  optional keys may be added to pass other information back from the layout."
   (render-layout [this request fields buttons data env]
-                 "Return rendered HTML for all form fields"))
+                 "Return a map containing :body and other optional keys"))
+(defprotocol Form
+  "Render form HTML."
+  (render-form [this request fields data env]
+               "Return a map containing :body and other optional keys"))
 
 (defprotocol Button
   "Render a form button."
@@ -82,16 +84,17 @@
   (temp-get [this key]))
   
 (defprotocol Control
-  "Add hidden control fields during the get request and then determine if the
-  form was cancel or double posted when the form is submitted. May also store
-  control information in the session."
+  "Add hidden control fields during the GET request and then determine if the
+  form was canceled or double posted when the form is submitted. May also store
+  control information in temp storage."
   (add-control [this request fields] "Return a list of FormFields.")
   (status [this request] "Return a Ring response or nil."))
   
 (defprotocol FormView
   "Process a complete form view request. Return a map with form information
   to allow the form to be embedded in a page."
-  (view-form [this request] "Return a map of :title :body :errors."))
+  (view-form [this request]
+             "Return a map containing :body, :errors and other optional keys"))
 
 ;; =======================
 ;; Default implementations
@@ -111,9 +114,9 @@
 
 (defmethod field-label :default
   [{:keys [label required]}]
-  (let [div [:div {:class "field-label"} label]]
+  (let [div [:div.field-label label]]
     (if required
-      (vec (conj div [:span {:class "required"} "*"]))
+      (vec (conj div [:span.required "*"]))
       div)))
 
 (defmulti form-field-cell
@@ -124,13 +127,12 @@
 (defmethod form-field-cell :default
   [{:keys [id html errors] :as field-map}]
   (let [error-message (first errors) ;; TODO show all errors
-        error-attrs (if id {:id (str (name id) "-error")} {})
         error-attrs (if error-message
-                      error-attrs
-                      (merge error-attrs {:style "display:none;"}))]
-    [:div.sandbar-field-cell
+                      {}
+                      {:style "display:none;"})]
+    [:div.field-cell
      (field-label field-map)
-     [:div.sandbar-error-message error-attrs error-message]
+     [:div.field-error-message error-attrs error-message]
      html]))
 
 (defrecord Textfield [field-name attributes] Field
@@ -170,37 +172,43 @@
 ;; Form layout
 ;;
 
-(defrecord GridLayout [] Layout
+(defrecord GridLayout [title] Layout
   (render-layout [this request fields buttons data env]
     (let [rendered-fields (map #(render-field % data env) fields)
-          rendered-buttons (map #(render-button %) buttons)]
-      (html/html [:table
-                  [:tr
-                   [:td
-                    [:div rendered-fields]
-                    [:div.buttons
-                     [:span.basic-buttons rendered-buttons]]]]]))))
+          rendered-buttons (map #(render-button %) buttons)
+          title (if (fn? title)
+                  (title request)
+                  title)
+          body (html/html [:table
+                           [:tr
+                            [:td
+                             [:div rendered-fields]
+                             [:div.buttons
+                              [:span.basic-buttons rendered-buttons]]]]])
+          result {:body body}]
+      (if title
+        (assoc result :title title)
+        result))))
 
 ;;
 ;; Form
 ;;
 
-(defrecord SandbarForm [fields buttons action-method layout attributes] Form
-  (render-form [this request data env]
-    (let [fields (if (fn? fields)
-                   (fields request)
-                   fields)
-          [action method] (action-method request)
-          body (render-layout layout request fields buttons data env)
+(defrecord SandbarForm [buttons action-method layout attributes] Form
+  (render-form [this request fields data env]
+    (let [[action method] (action-method request)
+          layout (render-layout layout request fields buttons data env)
           method-str (.toUpperCase (name method))]
-      (html/html
-       [:div.sandbar-form
-        (-> (if (contains? #{:get :post} method)
-              [:form (merge {:method method-str :action action} attributes)]
-              [:form (merge {:method "POST" :action action} attributes)
-               [:input :type "hidden" :name "_method" :value method-str]])
-            (conj body)
-            (vec))]))))
+      (assoc layout
+        :body
+        (html/html
+         [:div.sandbar-form
+          (-> (if (contains? #{:get :post} method)
+                [:form (merge {:method method-str :action action} attributes)]
+                [:form (merge {:method "POST" :action action} attributes)
+                 [:input {:type "hidden" :name "_method" :value method-str}]])
+              (conj (:body layout))
+              (vec))])))))
 
 ;;
 ;; Data
@@ -248,8 +256,9 @@
 
 (defn grid-layout
   "This will implement all of the features of the current grid layout."
-  []
-  (GridLayout.))
+  [& {:keys [title] :as options}]
+  (let [title (or title "")]
+    (GridLayout. title)))
 
 (defn replace-params
   "Replace all routes params by values contained in the given params map."
@@ -261,9 +270,9 @@
 
 (defn form
   "Create a form..."
-  [fields & {:keys [create-method update-method create-action
-                    update-action layout buttons]
-             :as options}]
+  [& {:keys [create-method update-method create-action
+             update-action layout buttons]
+      :as options}]
   (let [attributes (dissoc options
                            :create-method :update-method :create-action
                            :update-action :layout :buttons)
@@ -286,4 +295,4 @@
                    :else :post)]))
         layout (or layout (grid-layout))
         buttons (or buttons [(button :submit) (button :cancel)])]
-    (SandbarForm. fields buttons action-method layout attributes)))
+    (SandbarForm. buttons action-method layout attributes)))

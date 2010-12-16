@@ -23,24 +23,25 @@
             [examples.forms.database :as db]
             [examples.forms.views :as views]))
 
+(def fields [(textfield :username :label "Username")])
+
 (def user-form
-     (form [(textfield :username :label "Username")]
-           :create-action "/users"
+     (form :create-action "/users"
            :update-action "/users/:id"
            :update-method :put
-           :layout (grid-layout)
+           :layout (grid-layout :title "Example Form")
            :buttons [(button :save) (button :cancel)]))
 
 #_(def user-form-view
-    (let [temp-storage (temp-storage)]
+       (let [temp-storage (temp-storage)]
          (form-view form
-                 :temp-storage temp-storage
-                 :control (control temp-storage)
-                 :defaults {:username "my name"}
-                 :data-store (fn [request] ...))))
+                    :temp-storage temp-storage
+                    :control (control temp-storage)
+                    :defaults {:username "my name"}
+                    :data-store (fn [request] ...))))
 
 (defn user-form-page [request]
-  (render-form user-form request {} {}))
+  (:body (render-form user-form request fields {} {})))
 
 (defroutes routes
   
