@@ -61,8 +61,10 @@
   optional keys may be added to pass other information back from the layout."
   (render-layout [this request fields buttons data env]
                  "Return a map containing :body and other optional keys"))
+
 (defprotocol Form
   "Render form HTML."
+  (unique-id [this] "Return a unique identifier for this form")
   (render-form [this request fields data env]
                "Return a map containing :body and other optional keys"))
 
@@ -80,8 +82,10 @@
 
 (defprotocol TempStorage
   "Store information that will be needed for multiple requests."
-  (temp-put! [this key data])
-  (temp-get [this key]))
+  (get-temp [this form key request] "Returns data for this form and key")
+  (put-temp! [this form key data]
+             "Returns a map of data which can be merged into the Ring response.
+              May use side effects to store data."))
   
 (defprotocol Control
   "Add hidden control fields during the GET request and then determine if the
@@ -90,11 +94,12 @@
   (add-control [this request fields] "Return a list of FormFields.")
   (status [this request] "Return a Ring response or nil."))
   
-(defprotocol FormView
-  "Process a complete form view request. Return a map with form information
-  to allow the form to be embedded in a page."
-  (view-form [this request]
-             "Return a map containing :body, :errors and other optional keys"))
+(defprotocol FormHandler
+  "Process a complete form view request. There may be many different kinds
+  of form handlers. Depending on the implementation, my return a Ring response
+  map or map to be used as an intermediate result."
+  (process-request [this request]
+                   "Return a map containing :body and other optional keys."))
 
 ;; =======================
 ;; Default implementations
@@ -161,13 +166,6 @@
                               :value label
                               :name (name type)}])))
 
-(defn button [type & {:keys [label] :as options}]
-  (let [label (or label (case type
-                              :save "Save"
-                              :cancel "Cancel"
-                              "Submit"))]
-    (SandbarButton. type label)))
-
 ;;
 ;; Form layout
 ;;
@@ -194,7 +192,8 @@
 ;; Form
 ;;
 
-(defrecord SandbarForm [buttons action-method layout attributes] Form
+(defrecord SandbarForm [form-name buttons action-method layout attributes] Form
+  (unique-id [this] form-name)
   (render-form [this request fields data env]
     (let [[action method] (action-method request)
           layout (render-layout layout request fields buttons data env)
@@ -221,14 +220,53 @@
   (default-form-data [this request] this))
 
 (extend-protocol DataSource
+  nil
+  (load-form-data [this request] nil)
   clojure.lang.IFn
-  (default-form-data [this request] (this request))
+  (load-form-data [this request] (this request))
   clojure.lang.IPersistentMap
-  (default-form-data [this request] this))
+  (load-form-data [this request] this))
+
+(extend-protocol TempStorage
+  nil
+  (put-temp! [this form key data] nil)
+  (get-temp [this form key request] nil)
+  clojure.lang.IPersistentMap
+  (put-temp! [this form k data] (merge {:flash {(unique-id form) {k data}}}
+                                         this))
+  (get-temp [this form k request] (get this k)))
 
 (defrecord FlashStorage [] TempStorage
-  (temp-put! [this key data] (session/flash-put! key data))
-  (temp-get [this key] (session/flash-get key)))
+  (put-temp! [this form key data] (session/flash-put! key data))
+  (get-temp [this form key request] (session/flash-get key)))
+
+;;
+;; Form Handling
+;;
+
+(defrecord EmbeddedFormHandler [form fields temp-store data-source defaults]
+  FormHandler
+  (process-request [this request]
+    (let [errors (get-temp temp-store form :errors request)
+          data (when errors
+                 (get-temp temp-store form :data request))
+          data (or data
+                   (load-form-data data-source request)
+                   (default-form-data defaults request))
+          env (if errors {:errors errors} {})
+          fields (if (fn? fields)
+                   (fields request)
+                   fields)
+          result (render-form form request fields data env)]
+      (if errors
+        (assoc result :errors errors)
+        result))))
+
+(defn embedded-form
+  "Create an embedded form handler."
+  [form fields & {:keys [temp-store data-source defaults] :as options}]
+  (let [defaults (or defaults {})]
+    (EmbeddedFormHandler. form fields temp-store data-source defaults)))
 
 ;; ============
 ;; Constructors
@@ -254,6 +292,13 @@
         field (if required (assoc field :required required) field)]
     field))
 
+(defn button [type & {:keys [label] :as options}]
+  (let [label (or label (case type
+                              :save "Save"
+                              :cancel "Cancel"
+                              "Submit"))]
+    (SandbarButton. type label)))
+
 (defn grid-layout
   "This will implement all of the features of the current grid layout."
   [& {:keys [title] :as options}]
@@ -270,9 +315,9 @@
 
 (defn form
   "Create a form..."
-  [& {:keys [create-method update-method create-action
-             update-action layout buttons]
-      :as options}]
+  [form-name & {:keys [create-method update-method create-action
+                       update-action layout buttons]
+                :as options}]
   (let [attributes (dissoc options
                            :create-method :update-method :create-action
                            :update-action :layout :buttons)
@@ -295,4 +340,6 @@
                    :else :post)]))
         layout (or layout (grid-layout))
         buttons (or buttons [(button :submit) (button :cancel)])]
-    (SandbarForm. buttons action-method layout attributes)))
+    (SandbarForm. form-name buttons action-method layout attributes)))
+
+
