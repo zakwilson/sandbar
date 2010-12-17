@@ -214,7 +214,7 @@
 ;;
 
 (extend-protocol Defaults
-  clojure.lang.IFn
+  clojure.lang.Fn
   (default-form-data [this request] (this request))
   clojure.lang.IPersistentMap
   (default-form-data [this request] this))
@@ -222,7 +222,7 @@
 (extend-protocol DataSource
   nil
   (load-form-data [this request] nil)
-  clojure.lang.IFn
+  clojure.lang.Fn
   (load-form-data [this request] (this request))
   clojure.lang.IPersistentMap
   (load-form-data [this request] this))
