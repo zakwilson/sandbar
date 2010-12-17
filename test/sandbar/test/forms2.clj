@@ -150,7 +150,9 @@
   (let [request {:uri "/a"}
         fields [(textfield :name
                            :id :name-
-                           :label "My Name")]]
+                           :label "My Name")
+                (button :submit)
+                (button :cancel)]]
     (let [form (form :user-form
                      :id :user-form)]
       (let [h (:body (render-form form request fields {} {}))]
@@ -210,9 +212,7 @@
           (is (= (form-action body :user-form) "/users"))
           (is (= (form-method body :user-form) "POST"))
           (is (= (fields-and-vals body :user-form)
-                 {:name ""
-                  :submit "Submit"
-                  :cancel "Cancel"})))
+                 {:name ""})))
         (testing "get defaults"
           (let [ef (embedded-form form
                                   fields

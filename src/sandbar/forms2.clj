@@ -59,7 +59,7 @@
   arguments is described above. This function returns a map with a key :body
   where the value is the rendered field HTML. Depending on the implementation
   optional keys may be added to pass other information back from the layout."
-  (render-layout [this request fields buttons data env]
+  (render-layout [this request fields data env]
                  "Return a map containing :body and other optional keys"))
 
 (defprotocol Form
@@ -67,10 +67,6 @@
   (unique-id [this] "Return a unique identifier for this form")
   (render-form [this request fields data env]
                "Return a map containing :body and other optional keys"))
-
-(defprotocol Button
-  "Render a form button."
-  (render-button [this] "Return rendered HTML for this button"))
 
 (defprotocol Defaults
   "Get the default data for a form."
@@ -159,21 +155,27 @@
                                          attributes)]]
                   (html/html (form-field-cell (assoc d :html field-html))))))
 
-(defrecord SandbarButton [type label] Button
-  (render-button [this]
-                 (html/html [:input.sandbar-button
-                             {:type "submit"
+(defn button? [field]
+  (= (type (field-map field nil nil)) "submit"))
+
+(defrecord Button [type label] Field
+  (field-map [this data env] {:type "submit"
                               :value label
-                              :name (name type)}])))
+                              :name (name type)})
+  (render-field [this data env]
+                (html/html [:input.sandbar-button
+                            (field-map this data env)])))
 
 ;;
 ;; Form layout
 ;;
 
 (defrecord GridLayout [title] Layout
-  (render-layout [this request fields buttons data env]
-    (let [rendered-fields (map #(render-field % data env) fields)
-          rendered-buttons (map #(render-button %) buttons)
+  (render-layout [this request fields data env]
+    (let [buttons (filter button? fields)
+          fields (filter (complement button?) fields)
+          rendered-fields (map #(render-field % data env) fields)
+          rendered-buttons (map #(render-field % data env) buttons)
           title (if (fn? title)
                   (title request)
                   title)
@@ -192,11 +194,11 @@
 ;; Form
 ;;
 
-(defrecord SandbarForm [form-name buttons action-method layout attributes] Form
+(defrecord SandbarForm [form-name action-method layout attributes] Form
   (unique-id [this] form-name)
   (render-form [this request fields data env]
     (let [[action method] (action-method request)
-          layout (render-layout layout request fields buttons data env)
+          layout (render-layout layout request fields data env)
           method-str (.toUpperCase (name method))]
       (assoc layout
         :body
@@ -262,11 +264,17 @@
         (assoc result :errors errors)
         result))))
 
-(defn embedded-form
-  "Create an embedded form handler."
-  [form fields & {:keys [temp-store data-source defaults] :as options}]
-  (let [defaults (or defaults {})]
-    (EmbeddedFormHandler. form fields temp-store data-source defaults)))
+;;
+;; Control
+;;
+
+(defrecord CancelControl [] Control
+  (add-control [this request fields])
+  (status [this request]))
+
+(defrecord DoublePostControl [] Control
+  (add-control [this request fields])
+  (status [this request]))
 
 ;; ============
 ;; Constructors
@@ -297,7 +305,7 @@
                               :save "Save"
                               :cancel "Cancel"
                               "Submit"))]
-    (SandbarButton. type label)))
+    (Button. type label)))
 
 (defn grid-layout
   "This will implement all of the features of the current grid layout."
@@ -316,11 +324,11 @@
 (defn form
   "Create a form..."
   [form-name & {:keys [create-method update-method create-action
-                       update-action layout buttons]
+                       update-action layout]
                 :as options}]
   (let [attributes (dissoc options
                            :create-method :update-method :create-action
-                           :update-action :layout :buttons)
+                           :update-action :layout)
         action-method
         (fn [request]
           (let [route-params (:route-params request)
@@ -338,8 +346,11 @@
              (cond (and id update-method) update-method
                    create-method create-method
                    :else :post)]))
-        layout (or layout (grid-layout))
-        buttons (or buttons [(button :submit) (button :cancel)])]
-    (SandbarForm. form-name buttons action-method layout attributes)))
+        layout (or layout (grid-layout))]
+    (SandbarForm. form-name action-method layout attributes)))
 
-
+(defn embedded-form
+  "Create an embedded form handler."
+  [form fields & {:keys [temp-store data-source defaults] :as options}]
+  (let [defaults (or defaults {})]
+    (EmbeddedFormHandler. form fields temp-store data-source defaults)))
