@@ -36,7 +36,7 @@
           field.
   :labels A map of field names to strings. Each string is the label to be used
           for that field. This will allow all labels to be placed into a
-          single map and will also be used for internationalization."
+          single map and will make internationalization simple to implement."
   (:require [hiccup.core :as html]
             [clojure.string :as string]
             [sandbar.stateful-session :as session]))
@@ -46,12 +46,15 @@
 ;; ==============
 ;; Form protocols
 ;; ==============
-;; This is not the complete set of form protocols. I have an idea of
+;; This is not a complete set of form protocols. I have an idea of
 ;; what they might be and I will be adding them here as they are implemented.
 
 (defprotocol Field
-  "The format of the data and env arguments is described above."
-  (field-map [this data env] "Return a map of field data")
+  "The format of the data and env arguments is described above. A field type is
+  a keyword. Standard types include: :textfield :textarea :cancel-button
+  :submit-button :hidden :checkbox, etc."
+  (field-map [this] [this data]
+             "Return a map of the field's :type, :name and :value.")
   (render-field [this data env] "Return renderd HTML for this field"))
 
 (defprotocol Layout
@@ -137,38 +140,56 @@
      html]))
 
 (defrecord Textfield [field-name attributes] Field
-  (field-map [this data env]
-             {:type :textfield
-              :field-name field-name
-              :label (or (:label this) (get (:labels env) field-name))
-              :value (or (field-name data) "")
-              :errors (get (:errors env) field-name)
-              :required (:required this)
-              :id (:id attributes)})
+  (field-map [this] (field-map this {}))
+  (field-map [this data] {:type :textfield
+                          :name field-name
+                          :value (or (field-name data) "")})
   (render-field [this data env]
-                (let [d (field-map this data env)
-                      field-html [:input
-                                  (merge {:type (:type d)
-                                          :name (name field-name)
-                                          :value (:value d)
-                                          :class "textfield"}
-                                         attributes)]]
-                  (html/html (form-field-cell (assoc d :html field-html))))))
+    (let [d (merge (field-map this data)
+                   {:label (or (:label this)
+                               (get (:labels env) field-name))
+                    :errors (get (:errors env) field-name)
+                    :required (:required this)
+                    :id (:id attributes)})
+         field-html [:input
+                     (merge {:type "text"
+                             :name (name field-name)
+                             :value (:value d)
+                             :class "textfield"}
+                            attributes)]]
+     (html/html (form-field-cell (assoc d :html field-html))))))
 
-(defn button? [field]
-  (= (type (field-map field nil nil)) "submit"))
+(defrecord Hidden [field-name value] Field
+  (field-map [this] (field-map this {}))
+  (field-map [this data] {:type :hidden
+                          :name field-name
+                          :value (or (get data field-name)
+                                     value
+                                     "")})
+  (render-field [this data env]
+                [:input {:type "hidden"
+                         :name (name field-name)
+                         :value (:value (field-map this data))}]))
 
-(defrecord Button [type label] Field
-  (field-map [this data env] {:type "submit"
-                              :value label
-                              :name (name type)})
+(defrecord Button [field-name value] Field
+  (field-map [this] {:type (if (= field-name :cancel)
+                             :cancel-button
+                             :submit-button)
+                     :name field-name
+                     :value value})
+  (field-map [this data] (field-map this))
   (render-field [this data env]
                 (html/html [:input.sandbar-button
-                            (field-map this data env)])))
+                            {:type "submit"
+                             :name (name field-name)
+                             :value value}])))
 
 ;;
 ;; Form layout
 ;;
+
+(defn button? [field]
+  (contains? #{:cancel-button :submit-button} (:type (field-map field))))
 
 (defrecord GridLayout [title] Layout
   (render-layout [this request fields data env]
@@ -246,7 +267,8 @@
 ;; Form Handling
 ;;
 
-(defrecord EmbeddedFormHandler [form fields temp-store data-source defaults]
+(defrecord EmbeddedFormHandler [form fields controls temp-store data-source
+                                defaults]
   FormHandler
   (process-request [this request]
     (let [errors (get-temp temp-store form :errors request)
@@ -259,6 +281,12 @@
           fields (if (fn? fields)
                    (fields request)
                    fields)
+          fields (if (seq controls)
+                   (reduce (fn [f next-control]
+                             (add-control next-control request f))
+                           fields
+                           controls)
+                   fields)
           result (render-form form request fields data env)]
       (if errors
         (assoc result :errors errors)
@@ -269,12 +297,17 @@
 ;;
 
 (defrecord CancelControl [] Control
-  (add-control [this request fields])
-  (status [this request]))
-
-(defrecord DoublePostControl [] Control
-  (add-control [this request fields])
-  (status [this request]))
+  (add-control [this request fields]
+    (if-let [cancel-buttons (->> fields
+                                 (filter button?)
+                                 (map field-map)
+                                 (filter #(= (:type %) :cancel-button)))]
+      (let [h (vec (map #(let [value (:value %)]
+                           (Hidden. :_cancel value))
+                        cancel-buttons))]
+        (vec (concat fields h)))
+      fields))
+  (status [this request] nil))
 
 ;; ============
 ;; Constructors
@@ -349,8 +382,18 @@
         layout (or layout (grid-layout))]
     (SandbarForm. form-name action-method layout attributes)))
 
+(defn cancel-control []
+  (CancelControl.))
+
 (defn embedded-form
   "Create an embedded form handler."
-  [form fields & {:keys [temp-store data-source defaults] :as options}]
-  (let [defaults (or defaults {})]
-    (EmbeddedFormHandler. form fields temp-store data-source defaults)))
+  [form fields & {:keys [temp-store data-source defaults controls]
+                  :as options}]
+  (let [controls (or controls [(cancel-control)])
+        defaults (or defaults {})]
+    (EmbeddedFormHandler. form
+                          fields
+                          controls
+                          temp-store
+                          data-source
+                          defaults)))

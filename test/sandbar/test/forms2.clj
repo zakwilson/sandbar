@@ -258,4 +258,15 @@
                 {:keys [title body]} (process-request ef {:uri "/b"})]
             (is (= title "My Title"))
             (is (true? (exists? body :name-)))
-            (is (true? (exists? body :age-)))))))))
+            (is (true? (exists? body :age-))))))
+      (testing "cancel control"
+        (let [fields [(textfield :name :id :name- :label "My Name")
+                      (button :submit)
+                      (button :cancel)]]
+          (let [ef (embedded-form form fields)
+                {:keys [title body]} (process-request ef {:uri "/a"})]
+            (is (= (fields-and-vals body :user-form)
+                   {:name ""
+                    :cancel "Cancel"
+                    :submit "Submit"
+                    :_cancel "Cancel"}))))))))

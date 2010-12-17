@@ -23,32 +23,27 @@
             [examples.forms.database :as db]
             [examples.forms.views :as views]))
 
-(def fields [(textfield :username :label "Username")])
+(def fields [(textfield :username :label "Username")
+             (button :save)
+             (button :cancel)])
 
 (def user-form
-     (form :create-action "/users"
-           :update-action "/users/:id"
-           :update-method :put
-           :layout (grid-layout :title "Example Form")
-           :buttons [(button :save) (button :cancel)]))
-
-#_(def user-form-view
-       (let [temp-storage (temp-storage)]
-         (form-view form
-                    :temp-storage temp-storage
-                    :control (control temp-storage)
-                    :defaults {:username "my name"}
-                    :data-store (fn [request] ...))))
+     (let [form (form :user-form
+                      :create-action "/users"
+                      :update-action "/users/:id"
+                      :update-method :put
+                      :layout (grid-layout :title "Example Form"))]
+       (embedded-form form fields)))
 
 (defn user-form-page [request]
-  (:body (render-form user-form request fields {} {})))
+  (process-request user-form request))
 
 (defroutes routes
   
   (GET "/users/new" request (views/layout (user-form-page request)))
-  #_(POST "/users" request (user-form-page request))
+  (POST "/users" request (user-form-page request))
   (GET "/users/:id/edit" request (views/layout (user-form-page request)))
-  #_(PUT "/users/:id" request (user-form-page request))
+  (PUT "/users/:id" request (user-form-page request))
   
   (GET "/" [] (views/home))
   (route/not-found "<h1>Not Found</h1>"))
