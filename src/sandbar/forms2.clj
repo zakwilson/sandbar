@@ -37,6 +37,7 @@
   :labels A map of field names to strings. Each string is the label to be used
           for that field. This will allow all labels to be placed into a
           single map and will make internationalization simple to implement."
+  (:use [sandbar.core :only [get-param]])
   (:require [hiccup.core :as html]
             [clojure.string :as string]
             [sandbar.stateful-session :as session]))
@@ -46,8 +47,6 @@
 ;; ==============
 ;; Form protocols
 ;; ==============
-;; This is not a complete set of form protocols. I have an idea of
-;; what they might be and I will be adding them here as they are implemented.
 
 (defprotocol Field
   "The format of the data and env arguments is described above. A field type is
@@ -91,7 +90,7 @@
   form was canceled or double posted when the form is submitted. May also store
   control information in temp storage."
   (add-control [this request fields] "Return a list of FormFields.")
-  (status [this request] "Return a Ring response or nil."))
+  (status [this request response] "Return a Ring response or nil."))
   
 (defprotocol FormHandler
   "Process a complete form view request. There may be many different kinds
@@ -99,6 +98,21 @@
   map or map to be used as an intermediate result."
   (process-request [this request]
                    "Return a map containing :body and other optional keys."))
+
+(defprotocol Validate
+  "The map returned from validate will contain one key for each field. For each
+  key the value will be a list of error messages."
+  (validate [this data] "Return a map of field names to validation errors."))
+
+(defprotocol Response
+  "Collaborators: TempStore."
+  (canceled [this data] "Return a Ring response map.")
+  (failure [this data errors] "Return a Ring response map.")
+  (success [this data] "Return a Ring response map."))
+
+(defprotocol Routes
+  "Collaborators: FormHandler"
+  (routes [this] "Returns a routing function."))
 
 ;; =======================
 ;; Default implementations
@@ -292,6 +306,22 @@
         (assoc result :errors errors)
         result))))
 
+(defn marshal [params]
+  (let [keys (map keyword (keys params))
+        params (zipmap keys (vals params))]
+    params))
+
+(defrecord SubmitHandler [response controls] FormHandler
+  (process-request [this request]
+    (if-let [result (reduce (fn [s next-control]
+                              (or s (status next-control request response)))
+                            nil
+                            controls)]
+      result
+      (let [params (:params request)
+            data (marshal params)]
+        (success response data)))))
+
 ;;
 ;; Control
 ;;
@@ -302,12 +332,17 @@
                                  (filter button?)
                                  (map field-map)
                                  (filter #(= (:type %) :cancel-button)))]
-      (let [h (vec (map #(let [value (:value %)]
-                           (Hidden. :_cancel value))
+      (let [h (vec (map #(Hidden. :_cancel (:name %))
                         cancel-buttons))]
         (vec (concat fields h)))
       fields))
-  (status [this request] nil))
+  (status [this request response]
+          (let [params (:params request)
+                cancel-name (keyword (get-param params :_cancel))
+                data (dissoc (marshal params) :_cancel)]
+            (when (get-param params cancel-name)
+              (let [data (dissoc data cancel-name)]
+                (canceled response data))))))
 
 ;; ============
 ;; Constructors
@@ -397,3 +432,8 @@
                           temp-store
                           data-source
                           defaults)))
+
+(defn submit-handler
+  [response & {:keys [controls] :as options}]
+  (let [controls (or controls [(cancel-control)])]
+    (SubmitHandler. response controls)))

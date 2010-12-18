@@ -117,6 +117,21 @@
                           (map #(-> % :attrs))
                           (map #(vector (keyword (:name %)) (:value %))))))))
 
+(defrecord EchoResponse [] Response
+  (canceled [this data]
+            {:type :canceled
+             :data data})
+  (failure [this data errors]
+           {:type :failure
+            :data data
+            :errors errors})
+  (success [this data]
+           {:type :success
+            :data data}))
+
+(defn echo-response []
+  (EchoResponse.))
+
 ;; =====
 ;; Tests
 ;; =====
@@ -269,4 +284,26 @@
                    {:name ""
                     :cancel "Cancel"
                     :submit "Submit"
-                    :_cancel "Cancel"}))))))))
+                    :_cancel "cancel"}))))))))
+
+;; Think about control. Do you want control to always remove any
+;; additional hidden elements it has added to the form.
+
+(deftest submit-form-test
+  (testing "form submission"
+    (testing "success"
+      (let [handler (submit-handler (echo-response))
+            result (process-request handler {:params {"name" "x"
+                                                      "submit" "Submit"
+                                                      "_cancel" "cancel"}})]
+        (is (= (:type result) :success))
+        (is (= (:data result) {:name "x"
+                               :_cancel "cancel"
+                               :submit "Submit"}))))
+    (testing "canceled"
+      (let [handler (submit-handler (echo-response))
+            result (process-request handler {:params {"name" "x"
+                                                      "cancel" "Cancel"
+                                                      "_cancel" "cancel"}})]
+        (is (= (:type result) :canceled))
+        (is (= (:data result) {:name "x"}))))))
