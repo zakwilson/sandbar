@@ -37,10 +37,10 @@
   :labels A map of field names to strings. Each string is the label to be used
           for that field. This will allow all labels to be placed into a
           single map and will make internationalization simple to implement."
-  (:use [sandbar.core :only [get-param]])
+  (:use [sandbar.core :only [get-param]]
+        [sandbar.validation :only [validation-errors]])
   (:require [hiccup.core :as html]
-            [clojure.string :as string]
-            [sandbar.stateful-session :as session]))
+            [clojure.string :as string]))
 
 ;; See sandbar.forms2.example-basic for usage.
 
@@ -49,48 +49,58 @@
 ;; ==============
 
 (defprotocol Field
-  "The format of the data and env arguments is described above. A field type is
-  a keyword. Standard types include: :textfield :textarea :cancel-button
+  "Standard field types include: :textfield :textarea :cancel-button
   :submit-button :hidden :checkbox, etc."
   (field-map [this] [this data]
              "Return a map of the field's :type, :name and :value.")
-  (render-field [this data env] "Return renderd HTML for this field"))
+  (render-field [this data env] "Return renderd HTML for this field."))
 
 (defprotocol Layout
-  "Layout form fields and render as HTML. The format of the data and env
-  arguments is described above. This function returns a map with a key :body
-  where the value is the rendered field HTML. Depending on the implementation
+  "Layout form fields and render as HTML. Returns a map with a key :body
+  where the value is the rendered HTML. Depending on the implementation,
   optional keys may be added to pass other information back from the layout."
   (render-layout [this request fields data env]
-                 "Return a map containing :body and other optional keys"))
+                 "Return a map containing :body and other optional keys."))
 
 (defprotocol Form
   "Render form HTML."
-  (unique-id [this] "Return a unique identifier for this form")
+  (unique-id [this] "Return a unique identifier for this form.")
   (render-form [this request fields data env]
-               "Return a map containing :body and other optional keys"))
+               "Return a map containing :body and other optional keys."))
 
 (defprotocol Defaults
   "Get the default data for a form."
-  (default-form-data [this request] "Return map of default form data"))
+  (default-form-data [this request] "Return a map of default form data."))
 
 (defprotocol DataSource
   "Load data for a form from an external data source."
-  (load-form-data [this request] "Return map of form data"))
+  (load-form-data [this request] "Return a map of form data."))
+
+;; Try not to use stateful-sessions. This means that you will not need
+;; TempStorage. Use Ring's flash and session management. If someone
+;; needs to store data in another location then they will need to
+;; implement a Ring backend.
 
 (defprotocol TempStorage
   "Store information that will be needed for multiple requests."
-  (get-temp [this form key request] "Returns data for this form and key")
+  (get-temp [this form key request] "Return stored data for this form and key.")
   (put-temp! [this form key data]
-             "Returns a map of data which can be merged into the Ring response.
+             "Return a map of data which can be merged into the Ring response.
               May use side effects to store data."))
   
 (defprotocol Control
   "Add hidden control fields during the GET request and then determine if the
-  form was canceled or double posted when the form is submitted. May also store
-  control information in temp storage."
+  form was canceled or double-posted when the form is submitted. May also store
+  control information in temp storage. The response-map is a map which contains
+  the keys :response and :data."
   (add-control [this request fields] "Return a list of FormFields.")
-  (status [this request response] "Return a Ring response or nil."))
+  (status [this request response-map] "Return a new response-map."))
+
+(defprotocol Validate
+  "Similar to the Control status function, validate will take a response-map
+  and return a new response map."
+  (validate [this response-map]
+            "Return a new response-map."))
   
 (defprotocol FormHandler
   "Process a complete form view request. There may be many different kinds
@@ -99,19 +109,14 @@
   (process-request [this request]
                    "Return a map containing :body and other optional keys."))
 
-(defprotocol Validate
-  "The map returned from validate will contain one key for each field. For each
-  key the value will be a list of error messages."
-  (validate [this data] "Return a map of field names to validation errors."))
-
-(defprotocol Response
-  "Collaborators: TempStore."
-  (canceled [this data] "Return a Ring response map.")
-  (failure [this data errors] "Return a Ring response map.")
-  (success [this data] "Return a Ring response map."))
+(defprotocol SubmitResponse
+  "Each function will usually return a Ring response or a function of the
+  response which returns a Ring response map."
+  (canceled [this data] "Return a map or function the request.")
+  (failure [this data errors] "Return a map or function request.")
+  (success [this data] "Return a map function request."))
 
 (defprotocol Routes
-  "Collaborators: FormHandler"
   (routes [this] "Returns a routing function."))
 
 ;; =======================
@@ -273,7 +278,7 @@
                                          this))
   (get-temp [this form k request] (get this k)))
 
-(defrecord FlashStorage [] TempStorage
+#_(defrecord FlashStorage [] TempStorage
   (put-temp! [this form key data] (session/flash-put! key data))
   (get-temp [this form key request] (session/flash-get key)))
 
@@ -311,16 +316,41 @@
         params (zipmap keys (vals params))]
     params))
 
-(defrecord SubmitHandler [response controls] FormHandler
+;; All Controls will have their status function called in order to filter
+;; out control data from the form data that was submitted. The result
+;; of the first call to canceled, failure or success with be returned
+;; from the process-request function. Extending SubmitResponse to
+;; maps, where each function returns itself, helps to make the
+;; implementation simple.
+
+(extend-type clojure.lang.IPersistentMap
+  SubmitResponse
+  (canceled [this data] this)
+  (failure [this data errors] this)
+  (success [this data] this)
+  Validate
+  (validate [this response-map] this))
+
+#_(defn RedirectResponse [cancel-uri success-fn] SubmitResponse
+  (canceled [this data] (redirect cancel-url))
+  (failure [this data errors]
+           (fn [request]
+             (redirect (let [failure-uri (get (-> request :headers) "referer")]
+                         ;; Store errors and form data in flash
+                         failure-uri))))
+  (success [this data] (redirect (success-fn data))))
+
+(defrecord SubmitHandler [response controls validator] FormHandler
   (process-request [this request]
-    (if-let [result (reduce (fn [s next-control]
-                              (or s (status next-control request response)))
-                            nil
-                            controls)]
-      result
-      (let [params (:params request)
-            data (marshal params)]
-        (success response data)))))
+    (let [params (:params request)
+          data (marshal params)
+          {:keys [response data]} 
+          (->> controls
+               (reduce (fn [response-map next-control]
+                         (status next-control request response-map))
+                       {:response response :data data})
+               (validate validator))]
+      (success response data))))
 
 ;;
 ;; Control
@@ -336,13 +366,22 @@
                         cancel-buttons))]
         (vec (concat fields h)))
       fields))
-  (status [this request response]
-          (let [params (:params request)
-                cancel-name (keyword (get-param params :_cancel))
-                data (dissoc (marshal params) :_cancel)]
-            (when (get-param params cancel-name)
-              (let [data (dissoc data cancel-name)]
-                (canceled response data))))))
+  (status [this request {:keys [response data]}]
+          (let [cancel-name (keyword (:_cancel data))
+                cancel (cancel-name data)
+                data (dissoc data :_cancel cancel-name)]
+            {:response (if cancel
+                         (canceled response data)
+                         response)
+             :data data})))
+
+(defrecord FunctionValidate [vfn] Validate
+  (validate [this {:keys [response data]}]
+            (let [errors (validation-errors (vfn data))]
+              {:response (if errors
+                           (failure response data errors)
+                           response)
+               :data data})))
 
 ;; ============
 ;; Constructors
@@ -433,7 +472,14 @@
                           data-source
                           defaults)))
 
+(defn validator-function [vfn]
+  (FunctionValidate. vfn))
+
 (defn submit-handler
-  [response & {:keys [controls] :as options}]
-  (let [controls (or controls [(cancel-control)])]
-    (SubmitHandler. response controls)))
+  [response & {:keys [controls validator]
+               :as options}]
+  (let [controls (or controls [(cancel-control)])
+        validator (cond (nil? validator) (validator-function identity)
+                        (satisfies? Validate validator) validator
+                        :else (validator-function validator))]
+    (SubmitHandler. response controls validator)))

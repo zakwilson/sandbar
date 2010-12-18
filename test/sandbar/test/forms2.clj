@@ -8,7 +8,9 @@
 
 (ns sandbar.test.forms2
   (:use [clojure.test :only [deftest testing is]]
-        [sandbar.forms2])
+        [sandbar.forms2]
+        [sandbar.validation :only [build-validator
+                                   non-empty-string]])
   (:require [net.cgrand.enlive-html :as html]))
 
 ;; ============
@@ -117,7 +119,7 @@
                           (map #(-> % :attrs))
                           (map #(vector (keyword (:name %)) (:value %))))))))
 
-(defrecord EchoResponse [] Response
+(defrecord TestResponse [] SubmitResponse
   (canceled [this data]
             {:type :canceled
              :data data})
@@ -129,8 +131,8 @@
            {:type :success
             :data data}))
 
-(defn echo-response []
-  (EchoResponse.))
+(defn test-response []
+  (TestResponse.))
 
 ;; =====
 ;; Tests
@@ -286,22 +288,61 @@
                     :submit "Submit"
                     :_cancel "cancel"}))))))))
 
-;; Think about control. Do you want control to always remove any
-;; additional hidden elements it has added to the form.
+(deftest validate-test
+  (let [validator (validator-function
+                   (build-validator (non-empty-string :name)))
+        test-fn #(-> (validate validator {:response (test-response)
+                                          :data %})
+                     :response
+                     :errors)]
+    (is (= (test-fn {})
+           {:name ["name cannot be blank!"]}))
+    (is (= (test-fn {:name ""})
+           {:name ["name cannot be blank!"]}))
+    (is (= (test-fn {:name "x"})
+           nil))))
 
 (deftest submit-form-test
   (testing "form submission"
     (testing "success"
-      (let [handler (submit-handler (echo-response))
+      (let [handler (submit-handler (test-response))
             result (process-request handler {:params {"name" "x"
                                                       "submit" "Submit"
                                                       "_cancel" "cancel"}})]
         (is (= (:type result) :success))
         (is (= (:data result) {:name "x"
-                               :_cancel "cancel"
                                :submit "Submit"}))))
     (testing "canceled"
-      (let [handler (submit-handler (echo-response))
+      (let [handler (submit-handler (test-response))
+            result (process-request handler {:params {"name" "x"
+                                                      "cancel" "Cancel"
+                                                      "_cancel" "cancel"}})]
+        (is (= (:type result) :canceled))
+        (is (= (:data result) {:name "x"}))))
+    (testing "validation failure with default impl"
+      (let [handler (submit-handler (test-response)
+                                    :validator
+                                    (build-validator (non-empty-string :name)))
+            result (process-request handler {:params {"submit" "Submit"
+                                                      "_cancel" "cancel"}})]
+        (is (= (:type result) :failure))
+        (is (= (:data result) {:submit "Submit"}))
+        (is (= (:errors result) {:name ["name cannot be blank!"]}))))
+    (testing "validation failure with custom impl"
+      (let [handler (submit-handler (test-response)
+                                    :validator
+                                    (validator-function
+                                     (build-validator
+                                      (non-empty-string :name))))
+            result (process-request handler {:params {"submit" "Submit"
+                                                      "_cancel" "cancel"}})]
+        (is (= (:type result) :failure))
+        (is (= (:data result) {:submit "Submit"}))
+        (is (= (:errors result) {:name ["name cannot be blank!"]}))))
+    (testing "cancel shortcuts validation"
+      (let [handler (submit-handler (test-response)
+                                    :validator
+                                    (build-validator (non-empty-string :name)))
             result (process-request handler {:params {"name" "x"
                                                       "cancel" "Cancel"
                                                       "_cancel" "cancel"}})]
