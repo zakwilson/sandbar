@@ -291,9 +291,12 @@
 (deftest validate-test
   (let [validator (validator-function
                    (build-validator (non-empty-string :name)))
-        test-fn #(-> (validate validator {:response (test-response)
-                                          :data %})
-                     :response
+        test-fn #(-> (process-submit validator
+                                     (test-response)
+                                     {:request {}
+                                      :data %
+                                      :return nil})
+                     :return
                      :errors)]
     (is (= (test-fn {})
            {:name ["name cannot be blank!"]}))

@@ -76,31 +76,24 @@
   "Load data for a form from an external data source."
   (load-form-data [this request] "Return a map of form data."))
 
-;; Try not to use stateful-sessions. This means that you will not need
-;; TempStorage. Use Ring's flash and session management. If someone
-;; needs to store data in another location then they will need to
-;; implement a Ring backend.
-
 (defprotocol TempStorage
   "Store information that will be needed for multiple requests."
   (get-temp [this form key request] "Return stored data for this form and key.")
   (put-temp! [this form key data]
              "Return a map of data which can be merged into the Ring response.
               May use side effects to store data."))
-  
-(defprotocol Control
-  "Add hidden control fields during the GET request and then determine if the
-  form was canceled or double-posted when the form is submitted. May also store
-  control information in temp storage. The response-map is a map which contains
-  the keys :response and :data."
-  (add-control [this request fields] "Return a list of FormFields.")
-  (status [this request response-map] "Return a new response-map."))
 
-(defprotocol Validate
-  "Similar to the Control status function, validate will take a response-map
-  and return a new response map."
-  (validate [this response-map]
-            "Return a new response-map."))
+(defprotocol SubmitProcessor
+  "Filter control information out of the submitted data. If an exceptional
+  state is encountered, generate a response. Status contains :request :data
+  and :return keys."
+  (process-submit [this response status] "Return the new status."))
+
+(defprotocol Control
+  "Add hidden control fields when a form is created. May also store
+  control information in flash storage. To use this data when a form is
+  submitted, implement SubmitProcessor."
+  (add-control [this request fields] "Return a list of FormFields."))
   
 (defprotocol FormHandler
   "Process a complete form view request. There may be many different kinds
@@ -278,10 +271,6 @@
                                          this))
   (get-temp [this form k request] (get this k)))
 
-#_(defrecord FlashStorage [] TempStorage
-  (put-temp! [this form key data] (session/flash-put! key data))
-  (get-temp [this form key request] (session/flash-get key)))
-
 ;;
 ;; Form Handling
 ;;
@@ -316,21 +305,6 @@
         params (zipmap keys (vals params))]
     params))
 
-;; All Controls will have their status function called in order to filter
-;; out control data from the form data that was submitted. The result
-;; of the first call to canceled, failure or success with be returned
-;; from the process-request function. Extending SubmitResponse to
-;; maps, where each function returns itself, helps to make the
-;; implementation simple.
-
-(extend-type clojure.lang.IPersistentMap
-  SubmitResponse
-  (canceled [this data] this)
-  (failure [this data errors] this)
-  (success [this data] this)
-  Validate
-  (validate [this response-map] this))
-
 #_(defn RedirectResponse [cancel-uri success-fn] SubmitResponse
   (canceled [this data] (redirect cancel-url))
   (failure [this data errors]
@@ -340,23 +314,34 @@
                          failure-uri))))
   (success [this data] (redirect (success-fn data))))
 
+(defn process-form-submit
+  "Call process-submit on each processor until one returns a non-nil value
+  or until you run out of processors."
+  [response processors status]
+  (loop [processors processors
+         status status]
+    (if (or (:return status) (not (seq processors)))
+      status
+      (recur (rest processors) (process-submit (first processors)
+                                               response
+                                               status)))))
+
 (defrecord SubmitHandler [response controls validator] FormHandler
   (process-request [this request]
-    (let [params (:params request)
-          data (marshal params)
-          {:keys [response data]} 
-          (->> controls
-               (reduce (fn [response-map next-control]
-                         (status next-control request response-map))
-                       {:response response :data data})
-               (validate validator))]
-      (success response data))))
+    (let [{:keys [return data]}
+          (process-form-submit response
+                               (conj controls validator)
+                               {:request request
+                                :data (-> request :params marshal)
+                                :return nil})]
+      (or return (success response data)))))
 
 ;;
 ;; Control
 ;;
 
-(defrecord CancelControl [] Control
+(defrecord CancelControl []
+  Control
   (add-control [this request fields]
     (if-let [cancel-buttons (->> fields
                                  (filter button?)
@@ -366,22 +351,25 @@
                         cancel-buttons))]
         (vec (concat fields h)))
       fields))
-  (status [this request {:keys [response data]}]
-          (let [cancel-name (keyword (:_cancel data))
-                cancel (cancel-name data)
-                data (dissoc data :_cancel cancel-name)]
-            {:response (if cancel
-                         (canceled response data)
-                         response)
-             :data data})))
+  SubmitProcessor
+  (process-submit [this response {:keys [request data]}]
+    (let [cancel-name (keyword (:_cancel data))
+          cancel (cancel-name data)
+          data (dissoc data :_cancel cancel-name)
+          return {:request request
+                  :data data}]
+      (if cancel
+        (merge return
+               {:return (canceled response data)})
+        return))))
 
-(defrecord FunctionValidate [vfn] Validate
-  (validate [this {:keys [response data]}]
-            (let [errors (validation-errors (vfn data))]
-              {:response (if errors
-                           (failure response data errors)
-                           response)
-               :data data})))
+(defrecord FunctionValidate [vfn] SubmitProcessor
+  (process-submit [this response {:keys [data] :as status}]
+    (let [errors (validation-errors (vfn data))]
+      (if errors
+        (merge status
+               {:return (failure response data errors)})
+        status))))
 
 ;; ============
 ;; Constructors
@@ -480,6 +468,6 @@
                :as options}]
   (let [controls (or controls [(cancel-control)])
         validator (cond (nil? validator) (validator-function identity)
-                        (satisfies? Validate validator) validator
+                        (satisfies? SubmitProcessor validator) validator
                         :else (validator-function validator))]
     (SubmitHandler. response controls validator)))
