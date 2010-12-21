@@ -248,10 +248,11 @@
             (is (nil? errors))
             (is (= title "My Title"))))
         (testing "get errors and input"
-          (let [ef (embedded-form form
+          (let [request {:flash {:user-form
+                                 {:errors {:name ["name err"]}
+                                  :data {:name "z"}}}}
+                ef (embedded-form form
                                   fields
-                                  :temp-store {:errors {:name ["name err"]}
-                                               :data {:name "z"}}
                                   :data-source {:name "y"}
                                   :defaults {:name "x"})
                 {:keys [title body errors]} (process-request ef request)]
@@ -288,7 +289,7 @@
                     :submit "Submit"
                     :_cancel "cancel"}))))))))
 
-(deftest validate-test
+(deftest validate-tests
   (let [validator (validator-function
                    (build-validator (non-empty-string :name)))
         test-fn #(-> (process-submit validator
@@ -305,7 +306,19 @@
     (is (= (test-fn {:name "x"})
            nil))))
 
-(deftest submit-form-test
+(deftest cancel-control-tests
+  (let [request {}
+        fields [(textfield :name :id :name- :label "My Name")
+                (button :submit)
+                (button :cancel)]
+        cc (cancel-control)
+        response-map {:fields fields
+                      :response {}}
+        {:keys [fields response]} (add-control cc request response-map)]
+    (is (= (count (filter #(= (:type (field-map %)) :hidden) fields))
+           1))))
+
+(deftest submit-form-tests
   (testing "form submission"
     (testing "success"
       (let [handler (submit-handler (test-response))

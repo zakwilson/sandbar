@@ -76,31 +76,14 @@
   "Load data for a form from an external data source."
   (load-form-data [this request] "Return a map of form data."))
 
-(defprotocol TempStorage
-  "Store information that will be needed for multiple requests."
-  (get-temp [this form key request] "Return stored data for this form and key.")
-  (put-temp! [this form key data]
-             "Return a map of data which can be merged into the Ring response.
-              May use side effects to store data."))
-
-(defprotocol SubmitProcessor
-  "Filter control information out of the submitted data. If an exceptional
-  state is encountered, generate a response. Status contains :request :data
-  and :return keys."
-  (process-submit [this response status] "Return the new status."))
-
 (defprotocol Control
-  "Add hidden control fields when a form is created. May also store
-  control information in flash storage. To use this data when a form is
-  submitted, implement SubmitProcessor."
-  (add-control [this request fields] "Return a list of FormFields."))
-  
-(defprotocol FormHandler
-  "Process a complete form view request. There may be many different kinds
-  of form handlers. Depending on the implementation, my return a Ring response
-  map or map to be used as an intermediate result."
-  (process-request [this request]
-                   "Return a map containing :body and other optional keys."))
+  "Add hidden control fields when a form is created. The response-map is a map
+  with keys :fields and :response. The add-control function will take and
+  return a response-map. The value of :response will be merged into the
+  final Ring response. To use this data when a form is submitted, implement
+  SubmitProcessor."
+  (add-control [this request response-map]
+               "Return map with :fields and :response."))
 
 (defprotocol SubmitResponse
   "Each function will usually return a Ring response or a function of the
@@ -108,6 +91,19 @@
   (canceled [this data] "Return a map or function the request.")
   (failure [this data errors] "Return a map or function request.")
   (success [this data] "Return a map function request."))
+
+(defprotocol SubmitProcessor
+  "Filter control information out of the submitted data. If an exceptional
+  state is encountered, generate a response. Status contains :request :data
+  and :return keys."
+  (process-submit [this response status] "Return the new status."))
+  
+(defprotocol FormHandler
+  "Process a complete form view request. There may be many different kinds
+  of form handlers. Depending on the implementation, my return a Ring response
+  map or map to be used as an intermediate result."
+  (process-request [this request]
+                   "Return a map containing :body and other optional keys."))
 
 (defprotocol Routes
   (routes [this] "Returns a routing function."))
@@ -262,39 +258,33 @@
   clojure.lang.IPersistentMap
   (load-form-data [this request] this))
 
-(extend-protocol TempStorage
-  nil
-  (put-temp! [this form key data] nil)
-  (get-temp [this form key request] nil)
-  clojure.lang.IPersistentMap
-  (put-temp! [this form k data] (merge {:flash {(unique-id form) {k data}}}
-                                         this))
-  (get-temp [this form k request] (get this k)))
-
 ;;
 ;; Form Handling
 ;;
 
-(defrecord EmbeddedFormHandler [form fields controls temp-store data-source
-                                defaults]
+(defrecord EmbeddedFormHandler [form fields controls data-source defaults]
   FormHandler
   (process-request [this request]
-    (let [errors (get-temp temp-store form :errors request)
+    (let [form-id (unique-id form)
+          errors (-> request :flash form-id :errors)
           data (when errors
-                 (get-temp temp-store form :data request))
+                 (-> request :flash form-id :data))
           data (or data
                    (load-form-data data-source request)
                    (default-form-data defaults request))
           env (if errors {:errors errors} {})
+          response {}
           fields (if (fn? fields)
                    (fields request)
                    fields)
-          fields (if (seq controls)
-                   (reduce (fn [f next-control]
-                             (add-control next-control request f))
-                           fields
-                           controls)
-                   fields)
+          {:keys [fields response]}
+          (if (seq controls)
+            (reduce (fn [f next-control]
+                      (add-control next-control request f))
+                    {:fields fields
+                     :response {}}
+                    controls)
+            fields)
           result (render-form form request fields data env)]
       (if errors
         (assoc result :errors errors)
@@ -342,26 +332,28 @@
 
 (defrecord CancelControl []
   Control
-  (add-control [this request fields]
-    (if-let [cancel-buttons (->> fields
-                                 (filter button?)
-                                 (map field-map)
-                                 (filter #(= (:type %) :cancel-button)))]
-      (let [h (vec (map #(Hidden. :_cancel (:name %))
-                        cancel-buttons))]
-        (vec (concat fields h)))
-      fields))
+  (add-control [this request {:keys [fields response]}]
+    {:fields
+     (if-let [cancel-buttons (->> fields
+                                  (filter button?)
+                                  (map field-map)
+                                  (filter #(= (:type %) :cancel-button)))]
+       (let [h (vec (map #(Hidden. :_cancel (:name %))
+                         cancel-buttons))]
+         (vec (concat fields h)))
+       fields)
+     :response response})
   SubmitProcessor
   (process-submit [this response {:keys [request data]}]
-    (let [cancel-name (keyword (:_cancel data))
-          cancel (cancel-name data)
-          data (dissoc data :_cancel cancel-name)
-          return {:request request
-                  :data data}]
-      (if cancel
-        (merge return
-               {:return (canceled response data)})
-        return))))
+                  (let [cancel-name (keyword (:_cancel data))
+                        cancel (cancel-name data)
+                        data (dissoc data :_cancel cancel-name)
+                        return {:request request
+                                :data data}]
+                    (if cancel
+                      (merge return
+                             {:return (canceled response data)})
+                      return))))
 
 (defrecord FunctionValidate [vfn] SubmitProcessor
   (process-submit [this response {:keys [data] :as status}]
@@ -449,14 +441,13 @@
 
 (defn embedded-form
   "Create an embedded form handler."
-  [form fields & {:keys [temp-store data-source defaults controls]
+  [form fields & {:keys [data-source defaults controls]
                   :as options}]
   (let [controls (or controls [(cancel-control)])
         defaults (or defaults {})]
     (EmbeddedFormHandler. form
                           fields
                           controls
-                          temp-store
                           data-source
                           defaults)))
 
