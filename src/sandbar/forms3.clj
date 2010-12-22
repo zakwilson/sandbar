@@ -19,14 +19,15 @@
 ;; Form Protocols
 ;; ==============
 
+(defprotocol Html
+  (render [this form-info] "Return rendered HTML."))
+
 (defprotocol Field
   (field-map [this] [this data]
-             "Return a map of the field's :type, :name and :value.")
-  (render-field [this form-info] "Return renderd HTML for this field."))
+             "Return a map of the field's :type, :name and :value."))
 
 (defprotocol Form
-  (unique-id [this] "Return a unique identifier for this form.")
-  (render-form [this form-info]))
+  (unique-id [this] "Return a unique identifier for this form."))
 
 (defprotocol SubmitResponse
   (canceled [this form-info])
@@ -76,12 +77,14 @@
      [:div.field-error-message error-attrs error-message]
      html]))
 
-(defrecord Textfield [field-name attributes] Field
+(defrecord Textfield [field-name attributes]
+  Field
   (field-map [this] (field-map this {}))
   (field-map [_ data] {:type :textfield
                        :name field-name
                        :value (or (field-name data) "")})
-  (render-field [this {:keys [form-data i18n errors]}]
+  Html
+  (render [this {:keys [form-data i18n errors]}]
     (let [d (merge (field-map this form-data)
                    {:label (or (:label this)
                                (get i18n field-name))
@@ -96,50 +99,134 @@
                              attributes)]]
       (html/html (form-field-cell (assoc d :html field-html))))))
 
-(defrecord Hidden [field-name value] Field
+(defrecord Hidden [field-name value]
+  Field
   (field-map [this] (field-map this {}))
   (field-map [_ data] {:type :hidden
                        :name field-name
                        :value (or (get data field-name)
                                   value
                                   "")})
-  (render-field [this {:keys [form-data]}]
+  Html
+  (render [this {:keys [form-data]}]
     (html/html [:input {:type "hidden"
                         :name (name field-name)
                         :value (:value (field-map this form-data))}])))
 
-(defrecord Button [field-name value] Field
+(defrecord Button [field-name value]
+  Field
   (field-map [_] {:type (if (= field-name :cancel)
                           :cancel-button
                           :submit-button)
                   :name field-name
                   :value value})
   (field-map [this _] (field-map this))
-  (render-field [_ _]
-                (html/html [:input.sandbar-button
-                            {:type "submit"
-                             :name (name field-name)
-                             :value value}])))
+  Html
+  (render [_ _]
+    (html/html [:input.sandbar-button
+                {:type "submit"
+                 :name (name field-name)
+                 :value value}])))
 
-(defrecord SandbarForm [form-name action-method attributes] Form
-  (unique-id [this] form-name)
-  (render-form [this {:keys [request response] :as form-info}]
+;;
+;; Form layout
+;;
+
+(defn button? [field]
+  (contains? #{:cancel-button :submit-button} (:type (field-map field))))
+
+(defrecord GridLayout [title]
+  Html
+  (render [_ {:keys [request response fields] :as form-info}]
+    (let [buttons (filter button? fields)
+          fields (filter (complement button?) fields)
+          rendered-fields (map #(render % form-info) fields)
+          rendered-buttons (map #(render % form-info) buttons)
+          title (if (fn? title)
+                  (title request)
+                  title)
+          body (html/html [:table
+                           [:tr
+                            [:td
+                             [:div rendered-fields]
+                             [:div.buttons
+                              [:span.basic-buttons rendered-buttons]]]]])]
+      (-> form-info
+          (assoc-in [:response :body] body)
+          (assoc :title title)))))
+
+;;
+;; Form
+;;
+
+(defrecord SandbarForm [form-name action-method layout attributes]
+  Form
+  (unique-id [_] form-name)
+  Html
+  (render [_ {:keys [request] :as form-info}]
     (let [[action method] (action-method request)
-          layout (:body response)
-          method-str (.toUpperCase (name method))]
-      (assoc-in form-info
-        [:response :body]
-        [:div.sandbar-form
-         (-> (if (contains? #{:get :post} method)
-               [:form (merge {:method method-str :action action} attributes)]
-               [:form (merge {:method "POST" :action action} attributes)
-                [:input {:type "hidden" :name "_method" :value method-str}]])
-             (conj layout)
-             vec)]))))
+          form-info (render layout form-info)
+          method-str (.toUpperCase (name method))
+          body (html/html
+                [:div.sandbar-form
+                 (-> (if (contains? #{:get :post} method)
+                       [:form (merge {:method method-str
+                                      :action action}
+                                     attributes)]
+                       [:form (merge {:method "POST" :action action} attributes)
+                        [:input {:type "hidden"
+                                 :name "_method"
+                                 :value method-str}]])
+                     (conj (-> form-info :response :body))
+                     (vec))])]
+      (-> form-info
+          (assoc-in [:response :body] body)))))
+
+(defrecord EmbeddedFormHandler [f]
+  FormHandler
+  (process-request [_ request] (f request)))
 
 ;; ============
 ;; Constructors
 ;; ============
+
+;;
+;; Form View Processors
+;;
+
+(defn add-errors [form]
+  (fn [form-info]
+    (let [id (unique-id form)
+          errors (-> form-info :request :flash id :errors)]
+      (assoc form-info :errors errors))))
+
+(defn add-previous-input [form]
+  (fn [form-info]
+    (let [id (unique-id form)
+          errors (-> form-info :errors)]
+      (if errors
+        (assoc form-info :form-data (-> form-info :request :flash id :data))
+        form-info))))
+
+(defn add-source [load-fn]
+  (fn [form-info]
+    (if-let [form-data (:form-data form-info)]
+      form-info
+      (assoc form-info :form-data (if-let [params (:params form-info)]
+                                    (load-fn params))))))
+
+(defn add-defaults [m]
+  (fn [form-info]
+    (let [d (if (fn? m)
+              (m (:request form-info))
+              m)]
+      (if-let [form-data (:form-data form-info)]
+        form-info
+        (assoc form-info :form-data d)))))
+
+;;
+;; Record Constructors
+;;
 
 (defn textfield
   "Create a form textfield. The first argument is the field name. Optional
@@ -168,6 +255,12 @@
                               "Submit"))]
     (Button. type label)))
 
+(defn grid-layout
+  "This will implement all of the features of the current grid layout."
+  [& {:keys [title] :as options}]
+  (let [title (or title "")]
+    (GridLayout. title)))
+
 (defn replace-params
   "Replace all routes params by values contained in the given params map."
   [m s]
@@ -179,7 +272,7 @@
 (defn form
   "Create a form..."
   [form-name & {:keys [create-method update-method create-action
-                       update-action]
+                       update-action layout]
                 :as options}]
   (let [attributes (dissoc options
                            :create-method :update-method :create-action
@@ -200,42 +293,9 @@
                                    :else (:uri request)))
              (cond (and id update-method) update-method
                    create-method create-method
-                   :else :post)]))]
-    (SandbarForm. form-name action-method attributes)))
-
-;;
-;; Form View Processors
-;;
-
-(defn add-errors [form]
-  (fn [form-info]
-    (let [id (unique-id form)
-          errors (-> form-info :request :flash id :errors)]
-      (assoc form-info :errors errors))))
-
-(defn add-previous-input [form]
-  (fn [form-info]
-    (let [id (unique-id form)
-          errors (-> form-info :errors)]
-      (if errors
-        (assoc form-info :form-data (-> form-info :request :flash id :data))
-        form-info))))
-
-(defn load-source [load-fn]
-  (fn [form-info]
-    (if-let [form-data (:form-data form-info)]
-      form-info
-      (assoc form-info :form-data (if-let [params (:params form-info)]
-                                    (load-fn params))))))
-
-(defn defaults [m]
-  (fn [form-info]
-    (let [d (if (fn? m)
-              (m (:request form-info))
-              m)]
-      (if-let [form-data (:form-data form-info)]
-        form-info
-        (assoc form-info :form-data d)))))
+                   :else :post)]))
+        layout (or layout (grid-layout))]
+    (SandbarForm. form-name action-method layout attributes)))
 
 ;; ==========================
 ;; Form View Request Handling
@@ -254,7 +314,7 @@
   (let [keys (map keyword (keys params))]
     (get-params keys params)))
 
-(defn form-view [request fields view-processor]
+(defn form-view [fields view-processor request]
   (let [params (marshal (:params request))
         form-info {:form-data nil
                    :params params
@@ -265,4 +325,28 @@
                    :i18n {}}]
     (view-processor form-info)))
 
+;; =======================
+;; High Level Constructors
+;; =======================
 
+(defn make-processor [form load defaults]
+  (let [processors [(add-errors form)
+                    (add-previous-input form)
+                    load
+                    defaults
+                    (partial render form)]]
+    (apply comp (reverse processors))))
+
+(defn embedded-form
+  "Create an embedded form handler."
+  [form fields & {:keys [load defaults controls]
+                  :as options}]
+  (let [defaults (if defaults
+                   (add-defaults defaults)
+                   identity)
+        load (if load
+               (add-source load)
+               identity)]
+    (EmbeddedFormHandler. (partial form-view
+                                   fields
+                                   (make-processor form load defaults)))))
