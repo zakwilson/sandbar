@@ -281,15 +281,14 @@
                    :fields fields}]
     (let [form (form :user-form
                      :id :user-form)]
-      (let [{{h :body} :response} (render form form-info)]
+      (let [h (render form form-info)]
         (is (= (form-action h :user-form) "/a"))
         (is (= (form-method h :user-form) "POST"))
         (is (= (fields-and-vals h :user-form)
                {:name ""
                 :submit "Submit"
                 :cancel "Cancel"})))
-      (let [{{h :body} :response}
-            (render form (assoc form-info :form-data {:name "b"}))]
+      (let [h (render form (assoc form-info :form-data {:name "b"}))]
         (is (= (fields-and-vals h :user-form)
                {:name "b"
                 :submit "Submit"
@@ -299,18 +298,17 @@
                      :update-action "/users/:id"
                      :update-method :put
                      :id :user-form)]
-      (let [{{h :body} :response} (render form form-info)]
+      (let [h (render form form-info)]
         (is (= (form-action h :user-form) "/users"))
         (is (= (form-method h :user-form) "POST"))
         (is (= (fields-and-vals h :user-form)
                {:name ""
                 :submit "Submit"
                 :cancel "Cancel"})))
-      (let [{{h :body} :response}
-            (render form
-                    {:request (assoc request :route-params {"id" 7})
-                     :form-data {:name "x"}
-                     :fields fields})]
+      (let [h (render form
+                      {:request (assoc request :route-params {"id" 7})
+                       :form-data {:name "x"}
+                       :fields fields})]
         (is (= (form-action h :user-form) "/users/7"))
         (is (= (form-method h :user-form) "POST"))
         (is (= (fields-and-vals h :user-form)
@@ -318,7 +316,7 @@
                 :_method "PUT"
                 :submit "Submit"
                 :cancel "Cancel"}))))
-    (let [form (form :user-form
+    #_(let [form (form :user-form
                      :layout (grid-layout :title "My Title"))]
       (let [{title :title} (render form form-info)]
         (is (= title "My Title"))))))
@@ -329,14 +327,13 @@
                    :update-action "/users/:id"
                    :update-method :put
                    :id :user-form
-                   :layout (grid-layout :title "My Title"))]
+                   :layout (grid-layout))]
     (testing "embedded forms"
       (let [request {:uri "/a"}
             fields [(textfield :name :id :name- :label "My Name")]]
         (let [ef (embedded-form form fields)
-              {:keys [title response]} (process-request ef request)
+              {:keys [response]} (process-request ef request)
               body (:body response)]
-          (is (= title "My Title"))
           (is (= (form-action body :user-form) "/users"))
           (is (= (form-method body :user-form) "POST"))
           (is (= (fields-and-vals body :user-form)
@@ -345,30 +342,27 @@
           (let [ef (embedded-form form
                                   fields
                                   :defaults {:name "x"})
-                {:keys [title response errors]} (process-request ef request)
+                {:keys [response errors]} (process-request ef request)
                 body (:body response)]
             (is (= (attr body :name- :value) "x"))
-            (is (nil? errors))
-            (is (= title "My Title"))))
+            (is (nil? errors))))
         (testing "get defaults with function"
           (let [ef (embedded-form form
                                   fields
                                   :defaults (fn [req] {:name "x"}))
-                {:keys [title response errors]} (process-request ef request)
+                {:keys [response errors]} (process-request ef request)
                 body (:body response)]
             (is (= (attr body :name- :value) "x"))
-            (is (nil? errors))
-            (is (= title "My Title"))))
+            (is (nil? errors))))
         (testing "loads data"
           (let [ef (embedded-form form
                                   fields
                                   :load (fn [params] {:name "y"})
                                   :defaults {:name "x"})
-                {:keys [title response errors]} (process-request ef request)
+                {:keys [response errors]} (process-request ef request)
                 body (:body response)]
             (is (= (attr body :name- :value) "y"))
-            (is (nil? errors))
-            (is (= title "My Title"))))
+            (is (nil? errors))))
         (testing "get errors and input"
           (let [request {:flash {:user-form
                                  {:errors {:name ["name err"]}
@@ -377,11 +371,10 @@
                                   fields
                                   :load (fn [params] {:name "y"})
                                   :defaults {:name "x"})
-                {:keys [title response errors]} (process-request ef request)
+                {:keys [response errors]} (process-request ef request)
                 body (:body response)]
             (is (= (attr body :name- :value) "z"))
             (is (= errors {:name ["name err"]}))
-            (is (= title "My Title"))
             (is (true? (error-visible? body :name-)))
             (is (= (error-message body :name-) "name err")))))
       #_(testing "fields as a function"
@@ -391,13 +384,11 @@
                          [(textfield :name :id :name- :label "My Name")
                           (textfield :age :id :age- :label "My Age")]))]
           (let [ef (embedded-form form fields)
-                {:keys [title body]} (process-request ef {:uri "/a"})]
-            (is (= title "My Title"))
+                {:keys [body]} (process-request ef {:uri "/a"})]
             (is (true? (exists? body :name-)))
             (is (false? (exists? body :age-))))
           (let [ef (embedded-form form fields)
-                {:keys [title body]} (process-request ef {:uri "/b"})]
-            (is (= title "My Title"))
+                {:keys [body]} (process-request ef {:uri "/b"})]
             (is (true? (exists? body :name-)))
             (is (true? (exists? body :age-))))))
       #_(testing "cancel control"
@@ -405,7 +396,7 @@
                       (button :submit)
                       (button :cancel)]]
           (let [ef (embedded-form form fields)
-                {:keys [title body]} (process-request ef {:uri "/a"})]
+                {:keys [body]} (process-request ef {:uri "/a"})]
             (is (= (fields-and-vals body :user-form)
                    {:name ""
                     :cancel "Cancel"

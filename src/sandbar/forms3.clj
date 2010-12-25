@@ -135,25 +135,22 @@
 (defn button? [field]
   (contains? #{:cancel-button :submit-button} (:type (field-map field))))
 
-(defrecord GridLayout [title]
+(defrecord GridLayout []
   Html
-  (render [_ {:keys [request response fields] :as form-info}]
+  (render [_ {:keys [request response fields title] :as form-info}]
     (let [buttons (filter button? fields)
           fields (filter (complement button?) fields)
           rendered-fields (map #(render % form-info) fields)
           rendered-buttons (map #(render % form-info) buttons)
           title (if (fn? title)
                   (title request)
-                  title)
-          body (html/html [:table
+                  title)]
+      (html/html [:table
                            [:tr
                             [:td
                              [:div rendered-fields]
                              [:div.buttons
-                              [:span.basic-buttons rendered-buttons]]]]])]
-      (-> form-info
-          (assoc-in [:response :body] body)
-          (assoc :title title)))))
+                              [:span.basic-buttons rendered-buttons]]]]]))))
 
 ;;
 ;; Form
@@ -165,22 +162,20 @@
   Html
   (render [_ {:keys [request] :as form-info}]
     (let [[action method] (action-method request)
-          form-info (render layout form-info)
-          method-str (.toUpperCase (name method))
-          body (html/html
-                [:div.sandbar-form
-                 (-> (if (contains? #{:get :post} method)
-                       [:form (merge {:method method-str
-                                      :action action}
-                                     attributes)]
-                       [:form (merge {:method "POST" :action action} attributes)
-                        [:input {:type "hidden"
-                                 :name "_method"
-                                 :value method-str}]])
-                     (conj (-> form-info :response :body))
-                     (vec))])]
-      (-> form-info
-          (assoc-in [:response :body] body)))))
+          layout (render layout form-info)
+          method-str (.toUpperCase (name method))]
+      (html/html
+       [:div.sandbar-form
+        (-> (if (contains? #{:get :post} method)
+              [:form (merge {:method method-str
+                             :action action}
+                            attributes)]
+              [:form (merge {:method "POST" :action action} attributes)
+               [:input {:type "hidden"
+                        :name "_method"
+                        :value method-str}]])
+            (conj layout)
+            (vec))]))))
 
 (defrecord EmbeddedFormHandler [f]
   FormHandler
@@ -257,9 +252,8 @@
 
 (defn grid-layout
   "This will implement all of the features of the current grid layout."
-  [& {:keys [title] :as options}]
-  (let [title (or title "")]
-    (GridLayout. title)))
+  [& {:keys [] :as options}]
+  (GridLayout.))
 
 (defn replace-params
   "Replace all routes params by values contained in the given params map."
@@ -334,7 +328,9 @@
                     (add-previous-input form)
                     load
                     defaults
-                    (partial render form)]]
+                    (fn [form-info]
+                      (assoc-in form-info [:response :body]
+                                (render form form-info)))]]
     (apply comp (reverse processors))))
 
 (defn embedded-form
