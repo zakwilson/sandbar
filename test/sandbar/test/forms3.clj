@@ -315,11 +315,7 @@
                {:name "x"
                 :_method "PUT"
                 :submit "Submit"
-                :cancel "Cancel"}))))
-    #_(let [form (form :user-form
-                     :layout (grid-layout :title "My Title"))]
-      (let [{title :title} (render form form-info)]
-        (is (= title "My Title"))))))
+                :cancel "Cancel"}))))))
 
 (deftest embedded-form-test
   (let [form (form :user-form
@@ -377,26 +373,26 @@
             (is (= errors {:name ["name err"]}))
             (is (true? (error-visible? body :name-)))
             (is (= (error-message body :name-) "name err")))))
-      #_(testing "fields as a function"
+      (testing "fields as a function"
         (let [fields (fn [request]
                        (if (= (-> request :uri) "/a")
                          [(textfield :name :id :name- :label "My Name")]
                          [(textfield :name :id :name- :label "My Name")
                           (textfield :age :id :age- :label "My Age")]))]
           (let [ef (embedded-form form fields)
-                {:keys [body]} (process-request ef {:uri "/a"})]
+                {{body :body} :response} (process-request ef {:uri "/a"})]
             (is (true? (exists? body :name-)))
             (is (false? (exists? body :age-))))
           (let [ef (embedded-form form fields)
-                {:keys [body]} (process-request ef {:uri "/b"})]
+                {{body :body} :response} (process-request ef {:uri "/b"})]
             (is (true? (exists? body :name-)))
             (is (true? (exists? body :age-))))))
-      #_(testing "cancel control"
+      (testing "cancel control"
         (let [fields [(textfield :name :id :name- :label "My Name")
                       (button :submit)
                       (button :cancel)]]
           (let [ef (embedded-form form fields)
-                {:keys [body]} (process-request ef {:uri "/a"})]
+                {{body :body} :response} (process-request ef {:uri "/a"})]
             (is (= (fields-and-vals body :user-form)
                    {:name ""
                     :cancel "Cancel"

@@ -219,6 +219,24 @@
         form-info
         (assoc form-info :form-data d)))))
 
+(defn render-form [form]
+  (fn [form-info]
+    (assoc-in form-info [:response :body]
+              (render form form-info))))
+
+(defn add-cancel []
+  (fn [{:keys [fields] :as form-info}]
+    (let [fields
+          (if-let [cancel-buttons (->> fields
+                                       (filter button?)
+                                       (map field-map)
+                                       (filter #(= (:type %) :cancel-button)))]
+            (let [h (vec (map #(Hidden. :_cancel (:name %))
+                              cancel-buttons))]
+              (vec (concat fields h)))
+            fields)]
+      (assoc form-info :fields fields))))
+
 ;;
 ;; Record Constructors
 ;;
@@ -315,7 +333,9 @@
                    :errors nil
                    :request request
                    :response {}
-                   :fields fields
+                   :fields (if (fn? fields)
+                             (fields request)
+                             fields)
                    :i18n {}}]
     (view-processor form-info)))
 
@@ -328,21 +348,28 @@
                     (add-previous-input form)
                     load
                     defaults
-                    (fn [form-info]
-                      (assoc-in form-info [:response :body]
-                                (render form form-info)))]]
+                    (add-cancel)
+                    (render-form form)]]
     (apply comp (reverse processors))))
 
 (defn embedded-form
   "Create an embedded form handler."
-  [form fields & {:keys [load defaults controls]
+  [form fields & {:keys [before-data
+                         load
+                         defaults 
+                         before-control
+                         controls
+                         before-render
+                         after-render
+                         processor]
                   :as options}]
   (let [defaults (if defaults
                    (add-defaults defaults)
                    identity)
         load (if load
                (add-source load)
-               identity)]
+               identity)
+        before-data (or before-data identity)]
     (EmbeddedFormHandler. (partial form-view
                                    fields
                                    (make-processor form load defaults)))))
