@@ -4,6 +4,7 @@ pom.xml
 .DS_Store
 src/examples
 public/js
+docs
 
 # ignore output
 out/

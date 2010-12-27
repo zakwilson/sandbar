@@ -120,16 +120,15 @@
                           (map #(vector (keyword (:name %)) (:value %))))))))
 
 (defrecord TestResponse [] SubmitResponse
-  (canceled [this data]
+  (canceled [this form-info]
             {:type :canceled
-             :data data})
-  (failure [this data errors]
+             :form-info form-info})
+  (failure [this form-info]
            {:type :failure
-            :data data
-            :errors errors})
-  (success [this data]
+            :form-info form-info})
+  (success [this form-info]
            {:type :success
-            :data data}))
+            :form-info form-info}))
 
 (defn test-response []
   (TestResponse.))
@@ -138,26 +137,159 @@
 ;; Tests
 ;; =====
 
+(deftest add-errors-tests
+  (let [form (form :user-form)
+        form-info {:request
+                   {:flash
+                    {:user-form {:errors {:name ["name err"]}}}}}
+        processor (add-errors form)]
+    (is (= (:errors (processor form-info))
+           {:name ["name err"]}))
+    (is (= (processor {})
+           {:errors nil}))))
+
+(deftest add-previous-input-tests
+  (let [form (form :user-form)
+        form-info {:errors {:name ["form err"]}
+                   :request
+                   {:flash
+                    {:user-form {:data {:name "x"}}}}}
+        processor (add-previous-input form)]
+    (is (= (processor form-info)
+           (merge form-info {:form-data {:name "x"}})))
+    (is (= (processor (dissoc form-info :errors))
+           (dissoc form-info :errors)))))
+
+(deftest add-source-tests
+  (testing "load source"
+    (let [processor (add-source #(-> % :id))]
+      (testing "load is called"
+        (let [form-info {:params {:id 42}
+                         :request {}}]
+          (is (= (:form-data (processor form-info))
+                 42))))
+      (testing "load is not called when data is present"
+        (let [request {:params {"id" "42"}}
+              form-info {:form-data {:name "x"}
+                         :request request}]
+          (is (= (:form-data (processor form-info))
+                 {:name "x"}))))
+      (testing "returns nil when no data is loaded"
+        (let [form-info {:request {}}]
+          (is (nil? (:form-data (processor form-info)))))))))
+
+(deftest add-defaults-tests
+  (testing "defaults as map"
+    (let [processor (add-defaults {:name "z"})]
+      (testing "when form data exists"
+        (let [form-info {:form-data {:name "x"}}]
+          (is (= (:form-data (processor form-info))
+                 {:name "x"}))))
+      (testing "when form data does not exist"
+        (let [form-info {}]
+          (is (= (:form-data (processor form-info))
+                 {:name "z"}))))))
+  (testing "defaults as function"
+    (let [processor (add-defaults (fn [request] {:name "z"}))]
+      (testing "when form data does not exist"
+        (let [form-info {}]
+          (is (= (:form-data (processor form-info))
+                 {:name "z"})))))))
+
+(deftest add-cancel-tests
+  (let [request {}
+        fields [(textfield :name :id :name- :label "My Name")
+                (button :submit)
+                (button :cancel)]
+        ac (add-cancel)
+        form-info {:fields fields}
+        {:keys [fields]} (ac form-info)]
+    (is (= (count (filter #(= (:type (field-map %)) :hidden) fields))
+           1))))
+
+(deftest form-view-tests
+  (testing "form view"
+    (testing "without processors"
+      (let [fields []
+            processor identity]
+        (is (= (form-view fields processor {})
+               {:form-data nil
+                :params {}
+                :errors nil
+                :request {}
+                :response {}
+                :fields fields
+                :i18n {}}))
+        (let [request {:params {"name" "x" "id" "42"}}]
+          (is (= (form-view fields processor request)
+                 {:form-data nil
+                  :params {:name "x"
+                           :id 42}
+                  :errors nil
+                  :request request
+                  :response {}
+                  :fields fields
+                  :i18n {}})))))
+    (testing "with processors"
+      (let [form (form :user-form)
+            fields [(textfield :name :id :name- :label "My Name")
+                    (button :submit)
+                    (button :cancel)]
+            processors [(add-errors form)
+                        (add-previous-input form)
+                        (add-source (fn [params]
+                                      (if-let [id (:id params)]
+                                        {:name "y"
+                                         :id (:id params)})))
+                        (add-defaults {:name "z"})]
+            view-processor (apply comp (reverse processors))]
+        (testing "error"
+          (let [request {:flash
+                         {:user-form {:data {:name "x"}
+                                      :errors {:name ["name err"]}}}}
+                result (form-view fields view-processor request)]
+            (is (= (select-keys result [:form-data :errors])
+                   {:form-data {:name "x"}
+                    :errors {:name ["name err"]}}))))
+        (testing "edit"
+          (let [params {"id" "42"}
+                request {:flash {} :params params}
+                result (form-view fields view-processor request)]
+            (is (= (select-keys result [:form-data :params])
+                   {:form-data {:name "y" :id 42}
+                    :params {:id 42}}))))
+        (testing "create"
+          (let [request {}
+                result (form-view fields view-processor request)]
+            (is (= (select-keys result [:form-data])
+                   {:form-data {:name "z"}}))))))))
+
+;;
+;; Form Fields
+;;
+
 (deftest textfield-tests
-  (let [h (render-field (textfield :name :id :name-) {} {})]
+  (let [h (render (textfield :name :id :name-) {})]
     (is (= (label h :name-) ""))
     (is (= (attr h :name- :size) "35"))
     (is (= (attr h :name- :name) "name"))
     (is (false? (required? h :name-)))
     (is (false? (error-visible? h :name-))))
   (let [field (textfield :name :id :name- :label "Name")]
-    (let [h (render-field field {} {})]
+    (let [h (render field {})]
       (is (= (label h :name-) "Name")))
-    (let [h (render-field field {:name "a"} {})]
+    (let [h (render field {:form-data {:name "a"}})]
       (is (= (attr h :name- :value) "a")))
-    (let [h (render-field field {:name "a"} {:errors {:name ["r"]}})]
+    (let [h (render field {:form-data {:name "a"}
+                                 :errors {:name ["r"]}})]
       (is (= (attr h :name- :style) nil))
       (is (= (error-message h :name-) "r")))
-    (let [h (render-field (textfield :name
+    (let [h (render (textfield :name
                                      :id :name-
                                      :label "Name"
                                      :required true)
-                          {:name "a"} {:errors {:name ["name error"]}})]
+                          {:form-data {:name "a"}
+                           :errors {:name ["name error"]}})]
       (is (= (attr h :name- :value) "a"))
       (is (true? (required? h :name-)))
       (is (true? (error-visible? h :name-)))
@@ -169,17 +301,19 @@
                            :id :name-
                            :label "My Name")
                 (button :submit)
-                (button :cancel)]]
+                (button :cancel)]
+        form-info {:request request
+                   :fields fields}]
     (let [form (form :user-form
                      :id :user-form)]
-      (let [h (:body (render-form form request fields {} {}))]
+      (let [h (render form form-info)]
         (is (= (form-action h :user-form) "/a"))
         (is (= (form-method h :user-form) "POST"))
         (is (= (fields-and-vals h :user-form)
                {:name ""
                 :submit "Submit"
                 :cancel "Cancel"})))
-      (let [h (:body (render-form form request fields {:name "b"} {}))]
+      (let [h (render form (assoc form-info :form-data {:name "b"}))]
         (is (= (fields-and-vals h :user-form)
                {:name "b"
                 :submit "Submit"
@@ -189,29 +323,24 @@
                      :update-action "/users/:id"
                      :update-method :put
                      :id :user-form)]
-      (let [h (:body (render-form form request fields {} {}))]
+      (let [h (render form form-info)]
         (is (= (form-action h :user-form) "/users"))
         (is (= (form-method h :user-form) "POST"))
         (is (= (fields-and-vals h :user-form)
                {:name ""
                 :submit "Submit"
                 :cancel "Cancel"})))
-      (let [h (:body (render-form form
-                                  (assoc request :route-params {"id" 7})
-                                  fields
-                                  {:name "x"}
-                                  {}))]
+      (let [h (render form
+                      {:request (assoc request :route-params {"id" 7})
+                       :form-data {:name "x"}
+                       :fields fields})]
         (is (= (form-action h :user-form) "/users/7"))
         (is (= (form-method h :user-form) "POST"))
         (is (= (fields-and-vals h :user-form)
                {:name "x"
                 :_method "PUT"
                 :submit "Submit"
-                :cancel "Cancel"}))))
-    (let [form (form :user-form
-                     :layout (grid-layout :title "My Title"))]
-      (let [{:keys [body title]} (render-form form request fields {} {})]
-        (is (= title "My Title"))))))
+                :cancel "Cancel"}))))))
 
 (deftest embedded-form-test
   (let [form (form :user-form
@@ -219,46 +348,54 @@
                    :update-action "/users/:id"
                    :update-method :put
                    :id :user-form
-                   :layout (grid-layout :title "My Title"))]
+                   :layout (grid-layout))]
     (testing "embedded forms"
       (let [request {:uri "/a"}
             fields [(textfield :name :id :name- :label "My Name")]]
         (let [ef (embedded-form form fields)
-              {:keys [title body]} (process-request ef request)]
-          (is (= title "My Title"))
+              {:keys [response]} (process-request ef request)
+              body (:body response)]
           (is (= (form-action body :user-form) "/users"))
           (is (= (form-method body :user-form) "POST"))
           (is (= (fields-and-vals body :user-form)
                  {:name ""})))
-        (testing "get defaults"
+        (testing "get defaults with map"
           (let [ef (embedded-form form
                                   fields
                                   :defaults {:name "x"})
-                {:keys [title body errors]} (process-request ef request)]
+                {:keys [response errors]} (process-request ef request)
+                body (:body response)]
             (is (= (attr body :name- :value) "x"))
-            (is (nil? errors))
-            (is (= title "My Title"))))
+            (is (nil? errors))))
+        (testing "get defaults with function"
+          (let [ef (embedded-form form
+                                  fields
+                                  :defaults (fn [req] {:name "x"}))
+                {:keys [response errors]} (process-request ef request)
+                body (:body response)]
+            (is (= (attr body :name- :value) "x"))
+            (is (nil? errors))))
         (testing "loads data"
           (let [ef (embedded-form form
                                   fields
-                                  :data-source {:name "y"}
+                                  :load (fn [params] {:name "y"})
                                   :defaults {:name "x"})
-                {:keys [title body errors]} (process-request ef request)]
+                {:keys [response errors]} (process-request ef request)
+                body (:body response)]
             (is (= (attr body :name- :value) "y"))
-            (is (nil? errors))
-            (is (= title "My Title"))))
+            (is (nil? errors))))
         (testing "get errors and input"
           (let [request {:flash {:user-form
                                  {:errors {:name ["name err"]}
                                   :data {:name "z"}}}}
                 ef (embedded-form form
                                   fields
-                                  :data-source {:name "y"}
+                                  :load (fn [params] {:name "y"})
                                   :defaults {:name "x"})
-                {:keys [title body errors]} (process-request ef request)]
+                {:keys [response errors]} (process-request ef request)
+                body (:body response)]
             (is (= (attr body :name- :value) "z"))
             (is (= errors {:name ["name err"]}))
-            (is (= title "My Title"))
             (is (true? (error-visible? body :name-)))
             (is (= (error-message body :name-) "name err")))))
       (testing "fields as a function"
@@ -268,13 +405,11 @@
                          [(textfield :name :id :name- :label "My Name")
                           (textfield :age :id :age- :label "My Age")]))]
           (let [ef (embedded-form form fields)
-                {:keys [title body]} (process-request ef {:uri "/a"})]
-            (is (= title "My Title"))
+                {{body :body} :response} (process-request ef {:uri "/a"})]
             (is (true? (exists? body :name-)))
             (is (false? (exists? body :age-))))
           (let [ef (embedded-form form fields)
-                {:keys [title body]} (process-request ef {:uri "/b"})]
-            (is (= title "My Title"))
+                {{body :body} :response} (process-request ef {:uri "/b"})]
             (is (true? (exists? body :name-)))
             (is (true? (exists? body :age-))))))
       (testing "cancel control"
@@ -282,22 +417,23 @@
                       (button :submit)
                       (button :cancel)]]
           (let [ef (embedded-form form fields)
-                {:keys [title body]} (process-request ef {:uri "/a"})]
+                {{body :body} :response} (process-request ef {:uri "/a"})]
             (is (= (fields-and-vals body :user-form)
                    {:name ""
                     :cancel "Cancel"
                     :submit "Submit"
                     :_cancel "cancel"}))))))))
 
+;; =================
+;; Submit Processing
+;; =================
+
 (deftest validate-tests
   (let [validator (validator-function
                    (build-validator (non-empty-string :name)))
         test-fn #(-> (process-submit validator
                                      (test-response)
-                                     {:request {}
-                                      :data %
-                                      :return nil})
-                     :return
+                                     {:form-data %})
                      :errors)]
     (is (= (test-fn {})
            {:name ["name cannot be blank!"]}))
@@ -306,35 +442,24 @@
     (is (= (test-fn {:name "x"})
            nil))))
 
-(deftest cancel-control-tests
-  (let [request {}
-        fields [(textfield :name :id :name- :label "My Name")
-                (button :submit)
-                (button :cancel)]
-        cc (cancel-control)
-        response-map {:fields fields
-                      :response {}}
-        {:keys [fields response]} (add-control cc request response-map)]
-    (is (= (count (filter #(= (:type (field-map %)) :hidden) fields))
-           1))))
-
 (deftest submit-form-tests
   (testing "form submission"
     (testing "success"
       (let [handler (submit-handler (test-response))
-            result (process-request handler {:params {"name" "x"
-                                                      "submit" "Submit"
-                                                      "_cancel" "cancel"}})]
+            request {:params {"name" "x"
+                              "submit" "Submit"
+                              "_cancel" "cancel"}}
+            result (process-request handler request)]
         (is (= (:type result) :success))
-        (is (= (:data result) {:name "x"
-                               :submit "Submit"}))))
+        (is (= (-> result :form-info :form-data)
+               {:name "x"
+                :submit "Submit"} ))))
     (testing "canceled"
       (let [handler (submit-handler (test-response))
             result (process-request handler {:params {"name" "x"
                                                       "cancel" "Cancel"
                                                       "_cancel" "cancel"}})]
-        (is (= (:type result) :canceled))
-        (is (= (:data result) {:name "x"}))))
+        (is (= (:type result) :canceled))))
     (testing "validation failure with default impl"
       (let [handler (submit-handler (test-response)
                                     :validator
@@ -342,8 +467,9 @@
             result (process-request handler {:params {"submit" "Submit"
                                                       "_cancel" "cancel"}})]
         (is (= (:type result) :failure))
-        (is (= (:data result) {:submit "Submit"}))
-        (is (= (:errors result) {:name ["name cannot be blank!"]}))))
+        (is (= (-> result :form-info :form-data) {:submit "Submit"}))
+        (is (= (-> result :form-info :errors)
+               {:name ["name cannot be blank!"]}))))
     (testing "validation failure with custom impl"
       (let [handler (submit-handler (test-response)
                                     :validator
@@ -353,8 +479,9 @@
             result (process-request handler {:params {"submit" "Submit"
                                                       "_cancel" "cancel"}})]
         (is (= (:type result) :failure))
-        (is (= (:data result) {:submit "Submit"}))
-        (is (= (:errors result) {:name ["name cannot be blank!"]}))))
+        (is (= (-> result :form-info :form-data) {:submit "Submit"}))
+        (is (= (-> result :form-info :errors)
+               {:name ["name cannot be blank!"]}))))
     (testing "cancel shortcuts validation"
       (let [handler (submit-handler (test-response)
                                     :validator
@@ -362,5 +489,4 @@
             result (process-request handler {:params {"name" "x"
                                                       "cancel" "Cancel"
                                                       "_cancel" "cancel"}})]
-        (is (= (:type result) :canceled))
-        (is (= (:data result) {:name "x"}))))))
+        (is (= (:type result) :canceled))))))

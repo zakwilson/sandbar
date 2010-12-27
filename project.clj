@@ -14,7 +14,8 @@
                      [ring/ring-httpcore-adapter "0.3.5"]
                      [lein-difftest "1.3.2-SNAPSHOT"]
                      [radagast "1.0.0"]
-                     [enlive "1.0.0-SNAPSHOT"]]
+                     [enlive "1.0.0-SNAPSHOT"]
+                     [marginalia "0.2.2"]]
   :hooks [leiningen.hooks.difftest]
   :namespaces [sandbar.tables]
   :radagast/ns-whitelist #"^sandbar.*")
