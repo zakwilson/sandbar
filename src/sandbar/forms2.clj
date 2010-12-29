@@ -43,6 +43,15 @@
   (field-map [this] [this data]
              "Return a map of the field's :type, :name and :value."))
 
+(defprotocol Resource
+  (new-uri [this])
+  (create-uri [this])
+  (edit-uri [this])
+  (update-uri [this])
+  (submit-method [this request])
+  (submit-action [this request])
+  (resource-id [this request]))
+
 (defprotocol Form
   (unique-id [this] "Return a unique identifier for this form."))
 
@@ -228,12 +237,38 @@
 ;; Form View
 ;; =========
 
-(defrecord SandbarForm [form-name action-method layout attributes]
+(defrecord RestfulResource [root id]
+  Resource
+  (new-uri [this] (str root "/new"))
+  (create-uri [this] (str root))
+  (edit-uri [this] (str root "/" id "/edit"))
+  (update-uri [this] (str root "/" id))
+  (resource-id [this request]
+    (let [route-params (:route-params request)]
+      (get-param route-params id)))
+  (submit-method [this request]
+    (let [id (resource-id this request)]
+      (if id :put :post)))
+  (submit-action [this request]
+    (let [route-params (:route-params request)
+          id (resource-id this request)
+          update-action (update-uri this)
+          create-action (create-uri this)]
+      (replace-params route-params
+                      (cond (and id update-action) update-action
+                            create-action create-action
+                            :else (:uri request))))))
+
+(defn restful-resource [root id]
+  (RestfulResource. root id))
+
+(defrecord SandbarForm [form-name resource layout attributes]
   Form
   (unique-id [_] form-name)
   Html
   (render [_ {:keys [request] :as form-info}]
-    (let [[action method] (action-method request)
+    (let [action (submit-action resource request)
+          method (submit-method resource request)
           layout (render layout form-info)
           method-str (.toUpperCase (name method))]
       (html/html
@@ -251,35 +286,35 @@
 
 (defn form
   "Create a form..."
-  [form-name & {:keys [create-method update-method create-action
-                       update-action layout]
-                :as options}]
-  (let [attributes (dissoc options
-                           :create-method :update-method :create-action
-                           :update-action :layout)
-        action-method
-        (fn [request]
-          (let [route-params (:route-params request)
-                id (get route-params "id")
-                update-action (if (fn? update-action)
-                                (update-action request)
-                                update-action)
-                create-action (if (fn? create-action)
-                                (create-action request)
-                                create-action)]
-            [(replace-params route-params
-                             (cond (and id update-action) update-action
-                                   create-action create-action
-                                   :else (:uri request)))
-             (cond (and id update-method) update-method
-                   create-method create-method
-                   :else :post)]))
+  [form-name & {:keys [resource layout] :as options}]
+  (let [attributes (dissoc options :resource :layout)
         layout (or layout (grid-layout))]
-    (SandbarForm. form-name action-method layout attributes)))
+    (SandbarForm. form-name resource layout attributes)))
 
-(defrecord EmbeddedFormHandler [f]
+(defn form-view [fields view-processor request]
+  (let [params (marshal (:params request))
+        form-info {:form-data nil
+                   :params params
+                   :errors nil
+                   :request request
+                   :response {}
+                   :fields (if (fn? fields)
+                             (fields request)
+                             fields)
+                   :i18n {}}]
+    (view-processor form-info)))
+
+(defrecord EmbeddedFormHandler [fields processor]
   FormHandler
-  (process-request [_ request] (f request)))
+  (process-request [_ request]
+                   (form-view fields processor request)))
+
+(defrecord FormPageHandler [layout embedded-form]
+  FormHandler
+  (process-request [_ request]
+                   (layout request
+                           (:response
+                            (process-request embedded-form request)))))
 
 (defn add-errors [form]
   (fn [form-info]
@@ -295,12 +330,11 @@
         (assoc form-info :form-data (-> form-info :request :flash id :data))
         form-info))))
 
-(defn add-source [load-fn]
+(defn add-source [resource load-fn]
   (fn [form-info]
-    (if-let [form-data (:form-data form-info)]
-      form-info
-      (assoc form-info :form-data (if-let [params (:params form-info)]
-                                    (load-fn params))))))
+    (if-let [id (resource-id resource (:request form-info))]
+      (assoc form-info :form-data (load-fn id))
+      form-info)))
 
 (defn add-defaults [m]
   (fn [form-info]
@@ -328,19 +362,6 @@
               (vec (concat fields h)))
             fields)]
       (assoc form-info :fields fields))))
-
-(defn form-view [fields view-processor request]
-  (let [params (marshal (:params request))
-        form-info {:form-data nil
-                   :params params
-                   :errors nil
-                   :request request
-                   :response {}
-                   :fields (if (fn? fields)
-                             (fields request)
-                             fields)
-                   :i18n {}}]
-    (view-processor form-info)))
 
 ;; Form Processing
 ;; ===============
@@ -393,13 +414,14 @@
                                                respond
                                                form-info)))))
 
-(defrecord SubmitHandler [respond controls validator] FormHandler
+(defrecord SubmitHandler [fields respond controls validator] FormHandler
   (process-request [this request]
     (let [{:keys [response] :as form-info}
           (process-form-submit respond
                                (conj controls validator)
                                {:request request
-                                :form-data (-> request :params marshal)})]
+                                :form-data (-> request :params marshal)
+                                :fields fields})]
       (or response (success respond form-info)))))
 
 ;; Builders
@@ -416,30 +438,32 @@
 
 (defn embedded-form
   "Create an embedded form handler."
-  [form fields & {:keys [before-data
-                         load
-                         defaults 
-                         before-control
-                         controls
-                         before-render
-                         after-render
-                         processor]
-                  :as options}]
+  [form resource fields & {:keys [before-data
+                                  load
+                                  defaults 
+                                  before-control
+                                  controls
+                                  before-render
+                                  after-render
+                                  processor]
+                           :as options}]
   (let [defaults (if defaults
                    (add-defaults defaults)
                    identity)
         load (if load
-               (add-source load)
+               (add-source resource load)
                identity)
         before-data (or before-data identity)]
-    (EmbeddedFormHandler. (partial form-view
-                                   fields
-                                   (make-processor form load defaults)))))
+    (EmbeddedFormHandler. fields (make-processor form load defaults))))
+
+(defn form-page
+  [form resource fields layout & options]
+  (FormPageHandler. layout (apply embedded-form form resource fields options)))
 
 (defn submit-handler
-  [respond & {:keys [controls validator] :as options}]
+  [fields respond & {:keys [controls validator] :as options}]
   (let [controls (or controls [(cancel-control)])
         validator (cond (nil? validator) (validator-function identity)
                         (satisfies? SubmitProcessor validator) validator
                         :else (validator-function validator))]
-    (SubmitHandler. respond controls validator)))
+    (SubmitHandler. fields respond controls validator)))
