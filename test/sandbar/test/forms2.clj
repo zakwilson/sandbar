@@ -8,6 +8,7 @@
 
 (ns sandbar.test.forms2
   (:use [clojure.test :only [deftest testing is]]
+        [sandbar.core :only [get-param]]
         [sandbar.forms2]
         [sandbar.validation :only [build-validator
                                    non-empty-string]])
@@ -133,6 +134,19 @@
 (defn test-response []
   (TestResponse.))
 
+(defrecord TestResource []
+  Resource
+  (new-uri [this] "/new")
+  (create-uri [this] "/create")
+  (edit-uri [this] "/edit")
+  (update-uri [this] "/update")
+  (resource-id [this request] (get-param (:params request) :id))
+  (submit-method [this request] :post)
+  (submit-action [this request] "/submit"))
+
+(defn test-resource []
+  (TestResource.))
+
 ;; =====
 ;; Tests
 ;; =====
@@ -160,23 +174,23 @@
     (is (= (processor (dissoc form-info :errors))
            (dissoc form-info :errors)))))
 
-#_(deftest add-source-tests
-  (testing "load source"
-    (let [processor (add-source #(-> % :id))]
-      (testing "load is called"
-        (let [form-info {:params {:id 42}
-                         :request {}}]
-          (is (= (:form-data (processor form-info))
-                 42))))
-      (testing "load is not called when data is present"
-        (let [request {:params {"id" "42"}}
-              form-info {:form-data {:name "x"}
-                         :request request}]
-          (is (= (:form-data (processor form-info))
-                 {:name "x"}))))
-      (testing "returns nil when no data is loaded"
-        (let [form-info {:request {}}]
-          (is (nil? (:form-data (processor form-info)))))))))
+(deftest add-source-tests
+  (let [resource (test-resource)]
+    (testing "load source"
+      (let [processor (add-source resource identity)]
+        (testing "load is called"
+          (let [form-info {:request {:params {:id 42}}}]
+            (is (= (:form-data (processor form-info))
+                   42))))
+        (testing "load is not called when data is present"
+          (let [request {:params {"id" "42"}}
+                form-info {:form-data {:name "x"}
+                           :request request}]
+            (is (= (:form-data (processor form-info))
+                   {:name "x"}))))
+        (testing "returns nil when no data is loaded"
+          (let [form-info {:request {}}]
+            (is (nil? (:form-data (processor form-info))))))))))
 
 (deftest add-defaults-tests
   (testing "defaults as map"
@@ -207,7 +221,7 @@
     (is (= (count (filter #(= (:type (field-map %)) :hidden) fields))
            1))))
 
-#_(deftest form-view-tests
+(deftest form-view-tests
   (testing "form view"
     (testing "without processors"
       (let [fields []
@@ -232,15 +246,15 @@
                   :i18n {}})))))
     (testing "with processors"
       (let [form (form :user-form)
+            resource (test-resource)
             fields [(textfield :name :id :name- :label "My Name")
                     (button :submit)
                     (button :cancel)]
             processors [(add-errors form)
                         (add-previous-input form)
-                        (add-source (fn [params]
-                                      (if-let [id (:id params)]
-                                        {:name "y"
-                                         :id (:id params)})))
+                        (add-source resource
+                                    (fn [id]
+                                      {:name "y" :id id}))
                         (add-defaults {:name "z"})]
             view-processor (apply comp (reverse processors))]
         (testing "error"
@@ -295,19 +309,21 @@
       (is (true? (error-visible? h :name-)))
       (is (= (error-message h :name-) "name error")))))
 
-#_(deftest form-tests
+(deftest form-tests
   (let [request {:uri "/a"}
         fields [(textfield :name
                            :id :name-
                            :label "My Name")
                 (button :submit)
                 (button :cancel)]
+        resource (test-resource)
         form-info {:request request
                    :fields fields}]
     (let [form (form :user-form
+                     :resource resource
                      :id :user-form)]
       (let [h (render form form-info)]
-        (is (= (form-action h :user-form) "/a"))
+        (is (= (form-action h :user-form) "/submit"))
         (is (= (form-method h :user-form) "POST"))
         (is (= (fields-and-vals h :user-form)
                {:name ""
@@ -318,10 +334,9 @@
                {:name "b"
                 :submit "Submit"
                 :cancel "Cancel"}))))
-    (let [form (form :user-form
-                     :create-action "/users"
-                     :update-action "/users/:id"
-                     :update-method :put
+    (let [resource (restful-resource "/users" :id)
+          form (form :user-form
+                     :resource resource
                      :id :user-form)]
       (let [h (render form form-info)]
         (is (= (form-action h :user-form) "/users"))
@@ -342,17 +357,16 @@
                 :submit "Submit"
                 :cancel "Cancel"}))))))
 
-#_(deftest embedded-form-test
-  (let [form (form :user-form
-                   :create-action "/users"
-                   :update-action "/users/:id"
-                   :update-method :put
+(deftest embedded-form-test
+  (let [resource (restful-resource "/users" :id)
+        form (form :user-form
+                   :resource resource
                    :id :user-form
                    :layout (grid-layout))]
     (testing "embedded forms"
       (let [request {:uri "/a"}
             fields [(textfield :name :id :name- :label "My Name")]]
-        (let [ef (embedded-form form fields)
+        (let [ef (embedded-form form resource fields)
               {:keys [response]} (process-request ef request)
               body (:body response)]
           (is (= (form-action body :user-form) "/users"))
@@ -361,6 +375,7 @@
                  {:name ""})))
         (testing "get defaults with map"
           (let [ef (embedded-form form
+                                  resource
                                   fields
                                   :defaults {:name "x"})
                 {:keys [response errors]} (process-request ef request)
@@ -369,6 +384,7 @@
             (is (nil? errors))))
         (testing "get defaults with function"
           (let [ef (embedded-form form
+                                  resource
                                   fields
                                   :defaults (fn [req] {:name "x"}))
                 {:keys [response errors]} (process-request ef request)
@@ -376,9 +392,11 @@
             (is (= (attr body :name- :value) "x"))
             (is (nil? errors))))
         (testing "loads data"
-          (let [ef (embedded-form form
+          (let [request (merge request {:route-params {:id 3}})
+                ef (embedded-form form
+                                  resource
                                   fields
-                                  :load (fn [params] {:name "y"})
+                                  :load (fn [_] {:name "y"})
                                   :defaults {:name "x"})
                 {:keys [response errors]} (process-request ef request)
                 body (:body response)]
@@ -389,6 +407,7 @@
                                  {:errors {:name ["name err"]}
                                   :data {:name "z"}}}}
                 ef (embedded-form form
+                                  resource
                                   fields
                                   :load (fn [params] {:name "y"})
                                   :defaults {:name "x"})
@@ -404,11 +423,11 @@
                          [(textfield :name :id :name- :label "My Name")]
                          [(textfield :name :id :name- :label "My Name")
                           (textfield :age :id :age- :label "My Age")]))]
-          (let [ef (embedded-form form fields)
+          (let [ef (embedded-form form resource fields)
                 {{body :body} :response} (process-request ef {:uri "/a"})]
             (is (true? (exists? body :name-)))
             (is (false? (exists? body :age-))))
-          (let [ef (embedded-form form fields)
+          (let [ef (embedded-form form resource fields)
                 {{body :body} :response} (process-request ef {:uri "/b"})]
             (is (true? (exists? body :name-)))
             (is (true? (exists? body :age-))))))
@@ -416,7 +435,7 @@
         (let [fields [(textfield :name :id :name- :label "My Name")
                       (button :submit)
                       (button :cancel)]]
-          (let [ef (embedded-form form fields)
+          (let [ef (embedded-form form resource fields)
                 {{body :body} :response} (process-request ef {:uri "/a"})]
             (is (= (fields-and-vals body :user-form)
                    {:name ""
@@ -428,7 +447,7 @@
 ;; Submit Processing
 ;; =================
 
-#_(deftest validate-tests
+(deftest validate-tests
   (let [validator (validator-function
                    (build-validator (non-empty-string :name)))
         test-fn #(-> (process-submit validator
@@ -442,7 +461,7 @@
     (is (= (test-fn {:name "x"})
            nil))))
 
-#_(deftest submit-form-tests
+(deftest submit-form-tests
   (testing "form submission"
     (testing "success"
       (let [handler (submit-handler [] (test-response))

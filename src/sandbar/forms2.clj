@@ -332,9 +332,11 @@
 
 (defn add-source [resource load-fn]
   (fn [form-info]
-    (if-let [id (resource-id resource (:request form-info))]
-      (assoc form-info :form-data (load-fn id))
-      form-info)))
+    (let [form-data (:form-data form-info)
+          id (resource-id resource (:request form-info))]
+      (cond form-data form-info
+            id (assoc form-info :form-data (load-fn id))
+            :else form-info))))
 
 (defn add-defaults [m]
   (fn [form-info]
