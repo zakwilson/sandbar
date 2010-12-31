@@ -27,7 +27,10 @@
   into this format. When a form is submitted, the data will arrive in this
   format for validation and all response functions will receive it in this
   way."
-  (:use [ring.util.response :only [redirect]]
+  (:use [clojure.contrib.def :only [name-with-attributes]]
+        [ring.util.response :only [redirect]]
+        ;; This will be removed
+        [compojure.core :only [routes GET POST PUT]]
         [sandbar.core :only [get-param]]
         [sandbar.validation :only [validation-errors]])
   (:require [hiccup.core :as html]
@@ -66,6 +69,9 @@
 (defprotocol FormHandler
   (process-request [this request]
                    "Return a map containing :body and other optional keys."))
+
+(defprotocol Routes
+  (create-routes [this]))
 
 
 ;; Form Fields
@@ -426,6 +432,23 @@
                                 :fields fields})]
       (or response (success respond form-info)))))
 
+;; TODO: Implement this is pure Ring. No need to depend on Compojure.
+(defrecord RestfulRoutes [resource view-handler submit-handler]
+  Routes
+  (create-routes [this]
+    (routes
+     (GET (new-uri resource) request (process-request view-handler
+                                                      request))
+     (POST (create-uri resource) request (process-request submit-handler
+                                                          request))
+     (GET (edit-uri resource) request (process-request view-handler
+                                                       request))
+     (PUT (update-uri resource) request (process-request submit-handler
+                                                         request)))))
+
+(defn restful-routes [resource view-handler submit-handler]
+  (RestfulRoutes. resource view-handler submit-handler))
+
 ;; Builders
 ;; ============
 
@@ -469,3 +492,38 @@
                         (satisfies? SubmitProcessor validator) validator
                         :else (validator-function validator))]
     (SubmitHandler. fields respond controls validator)))
+
+;; Combined Builders
+;; =================
+
+(defn make-form
+  [name & {:keys [on-cancel on-success validator resource fields layout
+                  page-layout load]
+           :as options}]
+  (let [resource resource
+        fields fields
+        validator validator
+        layout (or layout (grid-layout))
+        page-layout (or page-layout (fn [_ body] body))
+        form (form name
+                   :resource resource
+                   :layout layout)
+        view-handler (form-page form
+                                resource
+                                fields
+                                page-layout
+                                :load load)
+        responder
+        (redirect-response form
+                           on-cancel
+                           on-success)
+        submit-handler (submit-handler fields
+                                       responder
+                                       :validator validator)]
+    (restful-routes resource view-handler submit-handler)))
+
+(defmacro defform [name & options]
+  "Define a form handler function. The name may optionally be
+  followed by a doc-string and metadata map. See make-form for details."
+  (let [[name options] (name-with-attributes name options)]
+    `(def ~name (make-form ~(keyword name) ~@options))))
