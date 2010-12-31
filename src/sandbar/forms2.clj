@@ -53,7 +53,8 @@
   (update-uri [this])
   (submit-method [this request])
   (submit-action [this request])
-  (resource-id [this request]))
+  (resource-id [this request])
+  (create-routes [this view-handler submit-handler]))
 
 (defprotocol Form
   (unique-id [this] "Return a unique identifier for this form."))
@@ -69,10 +70,6 @@
 (defprotocol FormHandler
   (process-request [this request]
                    "Return a map containing :body and other optional keys."))
-
-(defprotocol Routes
-  (create-routes [this]))
-
 
 ;; Form Fields
 ;; ===========
@@ -263,7 +260,14 @@
       (replace-params route-params
                       (cond (and id update-action) update-action
                             create-action create-action
-                            :else (:uri request))))))
+                            :else (:uri request)))))
+  (create-routes [this view-handler submit-handler]
+    (routes
+     ;; TODO: Implement this is pure Ring. No need to depend on Compojure.
+     (GET (new-uri this) request (process-request view-handler request))
+     (POST (create-uri this) request (process-request submit-handler request))
+     (GET (edit-uri this) request (process-request view-handler request))
+     (PUT (update-uri this) request (process-request submit-handler request)))))
 
 (defn restful-resource [root id]
   (RestfulResource. root id))
@@ -432,23 +436,6 @@
                                 :fields fields})]
       (or response (success respond form-info)))))
 
-;; TODO: Implement this is pure Ring. No need to depend on Compojure.
-(defrecord RestfulRoutes [resource view-handler submit-handler]
-  Routes
-  (create-routes [this]
-    (routes
-     (GET (new-uri resource) request (process-request view-handler
-                                                      request))
-     (POST (create-uri resource) request (process-request submit-handler
-                                                          request))
-     (GET (edit-uri resource) request (process-request view-handler
-                                                       request))
-     (PUT (update-uri resource) request (process-request submit-handler
-                                                         request)))))
-
-(defn restful-routes [resource view-handler submit-handler]
-  (RestfulRoutes. resource view-handler submit-handler))
-
 ;; Builders
 ;; ============
 
@@ -520,7 +507,7 @@
         submit-handler (submit-handler fields
                                        responder
                                        :validator validator)]
-    (restful-routes resource view-handler submit-handler)))
+    (create-routes resource view-handler submit-handler)))
 
 (defmacro defform [name & options]
   "Define a form handler function. The name may optionally be

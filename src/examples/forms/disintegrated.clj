@@ -55,12 +55,9 @@
                      responder
                      :validator validator))
 
-(def user-form-routes
-     (restful-routes resource user-form-page user-form-submit))
-
 (defroutes routes
 
-  (create-routes user-form-routes)
+  (create-routes resource user-form-page user-form-submit)
   
   (GET "/" [] (views/home))
   (route/not-found "<h1>Not Found</h1>"))

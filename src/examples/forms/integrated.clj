@@ -36,8 +36,8 @@
                  "/"))
 
 (defroutes routes
-
-  (create-routes user-form)
+  
+  user-form
   
   (GET "/" [] (views/home))
   (route/not-found "<h1>Not Found</h1>"))
