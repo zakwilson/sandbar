@@ -78,7 +78,7 @@
 
   (label [this key] (get props key (name key))))
 
-(def idea-table-adapter (IdeaTable. :idea properties 10))
+(def idea-table-adapter (IdeaTable. :idea properties 2))
 
 (defn idea-table [request]
   (filter-and-sort-table idea-table-adapter

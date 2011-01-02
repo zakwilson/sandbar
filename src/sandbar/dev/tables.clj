@@ -209,42 +209,50 @@
                                                *table-id*))
                                 #(partition 2 %))))))
 
-(defn- page-controls [view content]
+(defn render-header-footer
+  [{:keys [column-count back-link next-link status]}]
+  [:tr
+   [:td {:colspan column-count}
+    [:table {:width "100%" :cellspacing "0" :cellpadding "0" :border "0"}
+     [:tr
+      [:td {:width "40px" :align "left"}
+       back-link]
+      [:td status]
+      [:td {:align "right"}
+       next-link]]]]])
+
+(defn- page-controls [view status hf-renderer]
   (if-let [page-size (:page-size view)]
     (let [{:keys [last page available column-count]} view
           next-page (+ page 1)
-          previous-page (- page 1)]
-      [:tr
-       [:td {:colspan column-count}
-        [:table {:width "100%" :cellspacing "0" :cellpadding "0" :border "0"}
-         [:tr
-          [:td {:width "40px" :align "left"}
-           (if (>= previous-page 0)
-             (link-to-js (page previous-page)
-                         "back"
-                         *table-id*))]
-          content
-          [:td {:align "right"}
-           (if (< last available)
-             (link-to-js (page next-page)
-                         "next"
-                         *table-id*))]]]]])))
+          previous-page (- page 1)
+          spec {:column-count column-count
+                :back-link (if (>= previous-page 0)
+                             (link-to-js (page previous-page)
+                                         "back"
+                                         *table-id*))
+                :next-link (link-to-js (page next-page)
+                                       "next"
+                                       *table-id*)
+                :status status}]
+      (hf-renderer spec))))
 
-(defn- page-control-header [name view]
+(defn- page-control-header [name view hfr]
   (page-controls view
                  (if (:page-size view)
                    (let [{:keys [first last available]} view]
-                    [:td.filter-table-summary
+                    [:span.filter-table-summary
                      "showing "
                      name " "
                      [:b (+ first 1)]
                      " through "
                      [:b last]
                      " of "
-                     [:b available]]))))
+                     [:b available]]))
+                 hfr))
 
-(defn- page-control-footer [view]
-  (page-controls view [:td]))
+(defn- page-control-footer [view hfr]
+  (page-controls view nil hfr))
 
 (defn make-table-view
   "Create the current view of the data that will be displayed in the table.
@@ -295,21 +303,25 @@
                   css-class)]
     next-row))
 
-(defn filter-and-sort-table [adapter column-spec params]
+(defn filter-and-sort-table
+  [adapter column-spec params & {:keys [header footer]}]
   (binding [*table-id* (keyword (str (name (:type adapter)) "-table"))]
-    (let [table-view (make-table-view adapter column-spec params)]
+    (let [table-view (make-table-view adapter column-spec params)
+          header (or header render-header-footer)
+          footer (or footer render-header-footer)]
       [:div {:id *table-id* :class (or (:class adapter)
                                        "filter-and-sort-table")}
        (create-table-sort-and-filter-controls adapter)
        [:table {:class "list"}
         (page-control-header (label adapter *table-id*)
-                             table-view)
+                             table-view
+                             header)
         (sort-table-header adapter column-spec)
         (doall
          (map (partial build-row adapter column-spec)
               (:data table-view)
               (cycle ["odd" "even"])))
-        (page-control-footer table-view)]
+        (page-control-footer table-view footer)]
        (include-js (str (cpath "/js/sandbar/table/")
                         (name *table-id*)
                         ".js"))])))
