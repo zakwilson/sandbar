@@ -185,6 +185,11 @@
                               "Submit"))]
     (Button. type label)))
 
+(defn hidden [type & {:keys [value] :as options}]
+  (if value
+    (Hidden. type value)
+    (Hidden. type "")))
+
 ;; Form layout
 ;; ===========
 
@@ -416,6 +421,14 @@
 (defn cancel-control []
   (CancelControl.))
 
+(defrecord FormDataCleaner [] SubmitProcessor
+  (process-submit [this respond {:keys [request form-data] :as form-info}]
+    (let [form-data (dissoc form-data :_method :save :cancel)]
+      (assoc form-info :form-data form-data))))
+
+(defn form-data-cleaner []
+  (FormDataCleaner.))
+
 (defn process-form-submit
   [respond processors form-info]
   (loop [processors processors
@@ -430,7 +443,7 @@
   (process-request [this request]
     (let [{:keys [response] :as form-info}
           (process-form-submit respond
-                               (conj controls validator)
+                               (conj controls (form-data-cleaner) validator)
                                {:request request
                                 :form-data (-> request :params marshal)
                                 :fields fields})]
