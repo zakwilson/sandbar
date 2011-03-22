@@ -17,5 +17,4 @@
                      [enlive "1.0.0-SNAPSHOT"]
                      [marginalia "0.2.2"]]
   :hooks [leiningen.hooks.difftest]
-  :namespaces [sandbar.tables]
   :radagast/ns-whitelist #"^sandbar.*")
