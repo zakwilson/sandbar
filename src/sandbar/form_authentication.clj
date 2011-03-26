@@ -43,16 +43,17 @@
 
 (defn login-page [adapter request]
   (template :default
+            :post
             (:uri request)
             {:buttons [[:submit "Login"] [:reset]]}
             (form-layout-grid [1 1]
                               :login
-                              [(textfield adapter :username {:size 25}
-                                          :required)
-                               (password adapter :password {:size 25}
-                                         :required)]
+                              [(textfield :username :size 25 :required true)
+                               (password :password :size 25 :required true)]
                               request
-                              {})))
+                              {}
+                              {}
+                              adapter)))
 
 (defn login-validator [adapter]
   (let [pw-validator (validate-password adapter)]

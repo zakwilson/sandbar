@@ -4,6 +4,7 @@ pom.xml
 .DS_Store
 public/js
 docs
+my.keystore
 
 # ignore output
 out/
