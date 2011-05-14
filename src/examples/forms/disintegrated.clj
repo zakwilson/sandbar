@@ -10,6 +10,7 @@
   "Demonstrates how to manually build a form using the default implementations
   of the form protocols (which are currently under development)."
   (:use [ring.adapter.jetty :only [run-jetty]]
+        [ring.middleware [params :only [wrap-params]]]
         [ring.middleware.file :only [wrap-file]]
         [compojure.core :only [defroutes GET POST PUT]]
         [sandbar.stateful-session :only [wrap-stateful-session
@@ -65,7 +66,8 @@
 
 (def application-routes (-> routes
                             wrap-stateful-session
-                            (wrap-file "public")))
+                            (wrap-file "public")
+                            wrap-params))
 
 (defn run []
   (run-jetty (var application-routes) {:join? false :port 8080}))

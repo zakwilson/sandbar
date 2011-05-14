@@ -441,12 +441,14 @@
 
 (defrecord SubmitHandler [fields respond controls validator] FormHandler
   (process-request [this request]
+                   (println request)
     (let [{:keys [response] :as form-info}
           (process-form-submit respond
                                (conj controls (form-data-cleaner) validator)
                                {:request request
                                 :form-data (-> request :params marshal)
                                 :fields fields})]
+      (println (str "forminfo: " form-info))
       (or response (success respond form-info)))))
 
 ;; Builders
