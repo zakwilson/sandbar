@@ -28,8 +28,7 @@
                      :resource resource
                      :layout (grid-layout)))
 
-(def fields [(hidden :secret :value 3)
-             (textfield :username :label "Username")
+(def fields [(textfield :username :label "Username")
              (button :save)
              (button :cancel)])
 

@@ -237,10 +237,15 @@
 (defn replace-params
   "Replace all routes params by values contained in the given params map."
   [m s]
-  (reduce #(string/replace-first %1
-                                 (str ":" (first %2))
-                                 (second %2))
-          s m))
+  (reduce (fn [uri entry]
+            (let [k (first entry)]
+              (string/replace-first uri
+                                    (if (keyword? k)
+                                      (str k)
+                                      (str ":" k))
+                                    (second entry))))
+          s
+          m))
 
 ;; Form View
 ;; =========
@@ -286,6 +291,7 @@
           method (submit-method resource request)
           layout (render layout form-info)
           method-str (.toUpperCase (name method))]
+      (println action)
       (html/html
        [:div.sandbar-form
         (-> (if (contains? #{:get :post} method)
@@ -441,7 +447,6 @@
 
 (defrecord SubmitHandler [fields respond controls validator] FormHandler
   (process-request [this request]
-                   (println request)
     (let [{:keys [response] :as form-info}
           (process-form-submit respond
                                (conj controls (form-data-cleaner) validator)
