@@ -178,6 +178,16 @@
         field (if required (assoc field :required required) field)]
     field))
 
+(defn password
+  "Same as textfield but sets the :type attribute to \"password\".
+
+   Same as calling:
+     (textfield :password :label <label> :type \"password\").
+
+  "
+  [field-name & {:keys [] :as options}]
+  (apply textfield field-name (flatten (seq (assoc options :type "password")))))
+
 (defn button [type & {:keys [label] :as options}]
   (let [label (or label (case type
                               :save "Save"
@@ -291,7 +301,6 @@
           method (submit-method resource request)
           layout (render layout form-info)
           method-str (.toUpperCase (name method))]
-      (println action)
       (html/html
        [:div.sandbar-form
         (-> (if (contains? #{:get :post} method)
@@ -453,7 +462,6 @@
                                {:request request
                                 :form-data (-> request :params marshal)
                                 :fields fields})]
-      (println (str "forminfo: " form-info))
       (or response (success respond form-info)))))
 
 ;; Builders

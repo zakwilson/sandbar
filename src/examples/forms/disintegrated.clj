@@ -29,6 +29,9 @@
                      :layout (grid-layout)))
 
 (def fields [(textfield :username :label "Username")
+             (textfield :first_name :label "First Name")
+             (textfield :last_name :label "Last Name")
+             (password :password :label "Password")
              (button :save)
              (button :cancel)])
 
