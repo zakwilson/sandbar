@@ -43,7 +43,6 @@
        (icon "icon.png")
        [:title title]]
       [:body
-       (if-let [m (flash-get :user-message)] [:div.message m])
        [:h2 "Sandbar Demo"]
        [:p "Maintain a list of users."]
        body]])))
