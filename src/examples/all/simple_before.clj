@@ -92,6 +92,4 @@
          (wrap-reload ['examples.all.simple-before])))
 
 (defn run []
-  (run-jetty (var app) {:join? false :ssl? true :port 8080 :ssl-port 8443
-                        :keystore "my.keystore"
-                        :key-password "foobar"}))
+  (run-jetty (var app) {:join? false :port 8080}))

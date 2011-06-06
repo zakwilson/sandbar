@@ -93,10 +93,8 @@
   :page-layout (fn [_ body] (layout body)))
 
 (def security-policy
-     [#"/admin.*"            [:admin :ssl]
-      #"/login.*"            [:any :ssl]
-      #".*.(css|png|gif|js)" [:any :any-channel]
-      #"/.*"                 [:any :nossl]])
+     [#"/admin.*"            :admin
+      #"/.*"                 :any])
 
 (defauth authorize
   :type :form
@@ -128,10 +126,7 @@
          (wrap-stateful-session {:store (memory-store my-session)})
          (wrap-file "public")
          wrap-params
-         (with-secure-channel security-policy 8080 8443)
          (wrap-reload ['examples.all.simple])))
 
 (defn run []
-  (run-jetty (var app) {:join? false :ssl? true :port 8080 :ssl-port 8443
-                        :keystore "my.keystore"
-                        :key-password "foobar"}))
+  (run-jetty (var app) {:join? false :port 8080}))
