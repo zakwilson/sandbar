@@ -121,6 +121,15 @@
                       :else false)
                (partition 2 config))))
 
+(defn gen-salt
+  "Generate a secure salt."
+  ([] (gen-salt 8))
+  ([n]
+     (let [random (java.security.SecureRandom.)
+           salt (make-array Byte/TYPE n)]
+       (.nextBytes random salt)
+       salt)))
+
 (defn hash-password
   "Generate a hash from the password and salt. Default value of n is
    *hash-delay*."
@@ -128,7 +137,9 @@
   ([password salt n]
      (let [digest (java.security.MessageDigest/getInstance "SHA-256")]
        (do (.reset digest)
-           (.update digest (.getBytes salt "UTF-8")))
+           (.update digest (if (string? salt)
+                             (.getBytes salt "UTF-8")
+                             salt)))
        (loop [input (.digest digest (.getBytes password "UTF-8"))
               count n]
          (if (= count 0)
