@@ -23,18 +23,18 @@
               :else response-s)
         
         (= outgoing-ss :empty)
-        (cond (nil? response-s) (when incoming-ss {::session incoming-ss})
+        (cond (nil? response-s) (when incoming-ss {:_sandbar_session incoming-ss})
               (= response-s :empty) :empty
               :else (if incoming-ss
-                      (assoc response-s ::session incoming-ss)
+                      (assoc response-s :_sandbar_session incoming-ss)
                       response-s))
         
         :else
-        (cond (nil? response-s) {::session outgoing-ss}
+        (cond (nil? response-s) {:_sandbar_session outgoing-ss}
               (= response-s :empty)
-              (assoc request-s ::session outgoing-ss)
+              (assoc request-s :_sandbar_session outgoing-ss)
               :else
-              (assoc response-s ::session outgoing-ss))))
+              (assoc response-s :_sandbar_session outgoing-ss))))
 
 (defn- response-session
   "Build the response session."
@@ -44,7 +44,7 @@
                           :else outgoing-ss)
         req-s (-> request
                   :session
-                  (dissoc ::session))
+                  (dissoc :_sandbar_session))
         res-s (if (contains? response :session)
                 (:session response)
                 :empty)]
@@ -54,14 +54,14 @@
   "Add stateful sessions to a ring handler. Does not modify the functional
    behavior of ring sessions except that returning nil will not remove
    the session if if there is stateful data. Session data stored by this
-   middleware will be put into the session under the ::session key. Also adds
-   map style flash support backed by Ring's flash middleware."
+   middleware will be put into the session under the :_sandbar_session key.
+   Also adds map style flash support backed by Ring's flash middleware."
   [handler]
   (fn [request]
-    (binding [sandbar-session (atom (-> request :session ::session))
+    (binding [sandbar-session (atom (-> request :session :_sandbar_session))
               sandbar-flash (atom {:incoming (-> request :flash)})]
       (let [incoming-ss @sandbar-session
-            request (update-in request [:session] dissoc ::session)
+            request (update-in request [:session] dissoc :_sandbar_session)
             response (handler request)
             outgoing-flash (merge (:outgoing @sandbar-flash)
                                   (:flash response))

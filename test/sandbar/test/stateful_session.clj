@@ -14,7 +14,7 @@
                                               read-session
                                               write-session]]))
 
-(def session-key :sandbar.stateful-session/session)
+(def session-key :_sandbar_session)
 
 (deftest response-session-test
   (let [tst #'sandbar.stateful-session/response-session]
