@@ -8,12 +8,12 @@
 
 (ns sandbar.test.auth
   (:use [clojure.test :only [deftest testing is]]
+        [slingshot.slingshot :only [try+]]
         [sandbar.auth]
         [sandbar.core :only [app-context redirect-301]]
         [sandbar.stateful-session :only [sandbar-session]]
         [sandbar.fixtures :only [fixture-security-config]]
-        [ring.util.response :only [redirect]])
-  (:require [clojure.contrib.error-kit :as kit]))
+        [ring.util.response :only [redirect]]))
 
 ;;
 ;; Helpers
@@ -169,14 +169,14 @@
           (is (false? (any-role-granted? :user)))))))
 
 (defmacro auth-error->false [& body]
-  `(kit/with-handler
+  `(try+
      (do ~@body)
-     (kit/handle *authentication-error* [n#] false)))
+     (catch [:type :authentication-error] {} false)))
 
 (defmacro access-error->false [& body]
-  `(kit/with-handler
+  `(try+
      (do ~@body)
-     (kit/handle *access-error* [n#] false)))
+     (catch [:type :access-error] {} false)))
 
 (defn test-handler-fn
   ([x] (test-handler-fn x "success"))

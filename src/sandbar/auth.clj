@@ -10,6 +10,7 @@
   "Authentication and authorization."
   (:use [clojure.set :only [intersection]]
         [ring.util.response :only [redirect]]
+        [slingshot.slingshot :only [throw+ try+]]
         [sandbar.core :only [cpath
                              remove-cpath
                              redirect?
@@ -17,20 +18,11 @@
                              append-to-redirect-loc]]
         [sandbar.stateful-session :only [session-get
                                          session-put!
-                                         session-delete-key!]])
-  (:require [clojure.contrib.error-kit :as kit]))
+                                         session-delete-key!]]))
 
-(def *hash-delay* 1000)
+(def ^:dynamic *hash-delay* 1000)
 
-(def *sandbar-current-user* nil)
-
-(kit/deferror *access-error* [] [n]
-  {:msg (str "Access error: " n)
-   :unhandled (kit/throw-msg Exception)})
-
-(kit/deferror *authentication-error* [] [n]
-  {:msg (str "Authentication error: " n)
-   :unhandled (kit/throw-msg Exception)})
+(def ^:dynamic *sandbar-current-user* nil)
 
 (defn- redirect-to-permission-denied [uri-prefix]
   (redirect (str uri-prefix "/permission-denied")))
@@ -172,11 +164,11 @@
 
 (defn access-error
   ([] (access-error "Access Denied!"))
-  ([n] (kit/raise *access-error* n)))
+  ([n] (throw+ {:type :access-error :custom-messagemessage n})))
 
 (defn authentication-error
   ([] (authentication-error "No Authenticated User!"))
-  ([n] (kit/raise *authentication-error* n)))
+  ([n] (throw+ {:type :authentication-error :custom-message n})))
 
 (defmacro ensure-authenticated [& body]
   `(if *sandbar-current-user*
@@ -210,7 +202,7 @@
      (do (session-delete-key! :current-user)
          logout-page))))
 
-(defn with-secure-channel
+(defn ^:dynamic with-secure-channel
   "Middleware function to redirect to either a secure or insecure channel."
   [handler config port ssl-port]
   (fn [request]
@@ -239,22 +231,22 @@
                (append-to-redirect-loc user-status uri-prefix)
                (allow-access? required-roles (:roles user-status))
                (binding [*sandbar-current-user* user-status]
-                 (kit/with-handler
-                   (handler request)
-                   (kit/handle *access-error* [n]
-                               (redirect-to-permission-denied uri-prefix))
-                   (kit/handle *authentication-error* [n]
-                               (if *sandbar-current-user*
-                                 (redirect-to-authentication-error uri-prefix)
-                                 (let [user-status (auth-fn request)]
-                                   (if (redirect? user-status)
-                                     (append-to-redirect-loc user-status
-                                                             uri-prefix)
-                                     (do (session-put! :current-user
-                                                       user-status)
-                                         (set! *sandbar-current-user*
-                                               user-status)
-                                         (handler request))))))))
+                 (try+
+                  (handler request)
+                  (catch [:type :access-error] _
+                    (redirect-to-permission-denied uri-prefix))
+                  (catch [:type :authentication-error] _
+                    (if *sandbar-current-user*
+                      (redirect-to-authentication-error uri-prefix)
+                      (let [user-status (auth-fn request)]
+                        (if (redirect? user-status)
+                          (append-to-redirect-loc user-status
+                                                  uri-prefix)
+                          (do (session-put! :current-user
+                                            user-status)
+                              (set! *sandbar-current-user*
+                                    user-status)
+                              ((with-security handler config auth-fn uri-prefix) request))))))))
                :else (redirect-to-permission-denied uri-prefix))))))
 
 (defmulti create-authenticator (fn [& args] (first args)))

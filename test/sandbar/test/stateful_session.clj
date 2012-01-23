@@ -10,9 +10,8 @@
   (:require ring.middleware.flash)
   (:use [clojure.test :only [deftest testing is]]
         [sandbar.stateful-session]
-        [ring.middleware.session.store :only [SessionStore
-                                              read-session
-                                              write-session]]))
+        [ring.middleware.session.store :only [read-session]]
+        [ring.middleware.session.memory :only [memory-store]]))
 
 (def session-key :_sandbar_session)
 
@@ -256,26 +255,16 @@
                  (fn [r] nil)) {:session {}})
                nil)))))
 
-(deftype TestSessionStore [session-map]
-  SessionStore
-  (read-session [_ _]
-    (@session-map :s {}))
-  (write-session [_ _ data]
-    (swap! session-map assoc :s data))
-  (delete-session [_ _]
-    (swap! session-map dissoc :s)))
-
-(defn test-session-store []
-  (TestSessionStore. (atom {})))
-
-(deftest warp-stateful-session-test
-  (let [store (test-session-store)
+(deftest wrap-stateful-session-test
+  (let [session-map (atom {})
+        store (memory-store session-map)
         handler (fn [r] (do (session-put! :x 1)
                             {:status 200 :body "hello"}))
         handler (wrap-stateful-session handler {:store store})
-        result (handler {})]
+        session-key-name :ring-session-key-name
+        result (handler {:cookies {"ring-session" {:value session-key-name}}})]
     (is (= (:body result) "hello"))
-    (is (= (-> (read-session store nil) session-key :x) 1))))
+    (is (= (-> @session-map session-key-name session-key :x) 1))))
 
 (deftest update-session!-test
   (binding [sandbar-session (atom {})]

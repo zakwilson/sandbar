@@ -14,7 +14,7 @@
 ;; Working with context paths
 ;;
 
-(def app-context (atom ""))
+(def ^:dynamic app-context (atom ""))
 
 (defn set-app-context!
   "Set the context path for this appliation. The context path will be used by
@@ -48,7 +48,7 @@
 ;; Resource location
 ;;
 
-(def resource-url-prefix (atom ""))
+(def ^:dynamic resource-url-prefix (atom ""))
 
 (defn set-resource-url-prefix!
   "Set the value of the resource-url-prefix. If the resource-url-prefix is the
