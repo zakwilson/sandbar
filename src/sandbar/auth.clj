@@ -164,7 +164,7 @@
 
 (defn access-error
   ([] (access-error "Access Denied!"))
-  ([n] (throw+ {:type :access-error :custom-messagemessage n})))
+  ([n] (throw+ {:type :access-error :custom-message n})))
 
 (defn authentication-error
   ([] (authentication-error "No Authenticated User!"))
