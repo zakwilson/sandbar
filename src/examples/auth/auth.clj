@@ -7,13 +7,16 @@
 ;; You must not remove this notice, or any other, from this software.
 
 (ns examples.auth.auth
-  "Simple example of using sandbar.auth with authorization at the function
-level."
-  (:use (ring.adapter jetty)
-        (ring.middleware params file)
-        (compojure core)
-        (hiccup core page-helpers)
-        (sandbar core stateful-session auth)))
+  "Simple example of using sandbar.auth with authorization at the
+  function level."
+  (:use [ring.adapter.jetty :only (run-jetty)]
+        [ring.middleware.file :only (wrap-file)]
+        [compojure.core :only (defroutes GET ANY)]
+        [hiccup.core :only (html)]
+        [hiccup.page-helpers :only (doctype link-to)]
+        [sandbar.auth :only (ensure-any-role-if any-role-granted? current-username logout! with-security)]
+        [sandbar.core :only (stylesheet)]
+        [sandbar.stateful-session :only (wrap-stateful-session)]))
 
 ;; Demonstrating how to use sandbar.auth. We create a web page with
 ;; two links, one to a member page and one to an admin

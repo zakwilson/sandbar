@@ -8,16 +8,16 @@
 
 (ns examples.auth.form-auth
   "Simple example of using sandbar.auth with sandbar.form-authentication."
-  (:use [ring.adapter jetty]
-        [ring.middleware params file file-info]
-        [compojure core]
-        [hiccup core page-helpers]
-        [sandbar core stateful-session auth
-                 form-authentication validation]
-        [examples.auth [auth :only [load-data-from
-                                    layout
-                                    home-view admin-view member-view
-                                    permission-denied-view]]]))
+  (:use [ring.adapter.jetty :only (run-jetty)]
+        [ring.middleware.file :only (wrap-file)]
+        [ring.middleware.params :only (wrap-params)]
+        [ring.middleware.file-info :only (wrap-file-info)]
+        [compojure.core :only (defroutes GET ANY)]
+        [sandbar.form-authentication :only (FormAuthAdapter form-authentication-routes form-authentication)]
+        [sandbar.validation :only (add-validation-error)]
+        [sandbar.auth :only (with-secure-channel with-security)]
+        [sandbar.stateful-session :only (wrap-stateful-session)]
+        [examples.auth.auth :only (layout home-view member-view admin-view permission-denied-view)]))
 
 ;; Building on the auth-demo code, adding form based
 ;; authentication. Please check out that demo first in order to
