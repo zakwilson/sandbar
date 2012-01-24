@@ -11,8 +11,8 @@
   (:use [ring.middleware.flash :only [wrap-flash]]
         [ring.middleware.session :only [wrap-session]]))
 
-(declare sandbar-session)
-(declare sandbar-flash)
+(declare ^:dynamic sandbar-session)
+(declare ^:dynamic sandbar-flash)
 
 (defn- merge-session
   ""

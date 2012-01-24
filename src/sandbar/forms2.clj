@@ -27,11 +27,11 @@
   into this format. When a form is submitted, the data will arrive in this
   format for validation and all response functions will receive it in this
   way."
-  (:use [clojure.contrib.def :only [name-with-attributes]]
-        [ring.util.response :only [redirect]]
+  (:use [ring.util.response :only [redirect]]
         ;; This will be removed
         [compojure.core :only [routes GET POST PUT]]
         [sandbar.core :only [get-param]]
+        [sandbar.util :only [name-with-attributes]]
         [sandbar.validation :only [validation-errors]])
   (:require [hiccup.core :as html]
             [clojure.string :as string]))
