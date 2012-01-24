@@ -8,6 +8,7 @@
                  [compojure "1.0.1"]
                  [hiccup "0.3.7"]
                  [slingshot "0.10.1"]
+                 [org.clojure/tools.macro "0.1.1"]
                  [inflections "0.6.6-SNAPSHOT"]]
   :dev-dependencies [[jline "0.9.94"]
                      [ring/ring-devel "1.0.1"]
