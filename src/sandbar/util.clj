@@ -8,38 +8,13 @@
 
 (ns sandbar.util
   "Utility functions for sandbar."
-  (:use [clojure.string :only [split]])
+  (:require [clojure.string :as string])
   (:import java.io.File))
 
 ;;
 ;; Misc
 ;; ====
 ;;
-
-(defn name-with-attributes
-  "To be used in macro definitions.
-   Handles optional docstrings and attribute maps for a name to be defined
-   in a list of macro arguments. If the first macro argument is a string,
-   it is added as a docstring to name and removed from the macro argument
-   list. If afterwards the first macro argument is a map, its entries are
-   added to the name's metadata map and the map is removed from the
-   macro argument list. The return value is a vector containing the name
-   with its extended metadata map and the list of unprocessed macro
-   arguments."
-  [name macro-args]
-  (let [[docstring macro-args] (if (string? (first macro-args))
-                                 [(first macro-args) (next macro-args)]
-                                 [nil macro-args])
-    [attr macro-args]          (if (map? (first macro-args))
-                                 [(first macro-args) (next macro-args)]
-                                 [{} macro-args])
-    attr                       (if docstring
-                                 (assoc attr :doc docstring)
-                                 attr)
-    attr                       (if (meta name)
-                                 (conj (meta name) attr)
-                                 attr)]
-    [(with-meta name attr) macro-args]))
 
 (defn append-to-keyword [k s]
   (keyword (str (name k) s)))
@@ -48,7 +23,7 @@
   (map #(keyword %) coll))
 
 (defn path-to-seq [path]
-  (filter #(not (.equals % "")) (split path #"/")))
+  (filter #(not (.equals % "")) (string/split path #"/")))
 
 (defn seq-to-path [coll]
   (apply str (interleave (repeat "/") coll)))
@@ -85,7 +60,7 @@
 ;;
 
 (defn without-ext [s]
-  (apply str (interpose "." (reverse (rest (reverse (split s #"[.]")))))))
+  (apply str (interpose "." (reverse (rest (reverse (string/split s #"[.]")))))))
 
 (defn remove-file-ext [file-name]
   (let [index (.lastIndexOf file-name ".")]
@@ -96,8 +71,8 @@
 (defn file-to-ns-string [f root-dir]
   (let [f-sep File/separator
         test-dir-pattern (re-pattern (str f-sep root-dir f-sep))]
-    (replace (remove-file-ext
-              (last (split (.getAbsolutePath f) test-dir-pattern)))
+    (string/replace (remove-file-ext
+              (last (string/split (.getAbsolutePath f) test-dir-pattern)))
              (re-pattern f-sep)
              ".")))
  

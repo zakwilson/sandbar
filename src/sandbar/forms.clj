@@ -8,12 +8,13 @@
 
 (ns sandbar.forms
   "Forms and form layouts."
-  (:use [ring.util.response :only [redirect]]
+  (:use [clojure.tools.macro :only [name-with-attributes]]
+        [ring.util.response :only [redirect]]
         [compojure.core :only [routes GET POST PUT]]
         [sandbar.stateful-session :only [flash-put!
                                          flash-get]]
         [sandbar.core :only [cpath get-param property-lookup]]
-        [sandbar.util :only [index-by name-with-attributes]]
+        [sandbar.util :only [index-by]]
         [sandbar.validation :only [if-valid
                                    required-fields
                                    build-validator
