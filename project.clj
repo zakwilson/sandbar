@@ -6,7 +6,7 @@
                  [org.clojure/data.json "0.1.2"]
                  [ring/ring-core "1.0.1"]
                  [compojure "1.0.1"]
-                 [hiccup "0.3.7"]
+                 [hiccup "1.0.0"]
                  [slingshot "0.10.1"]
                  [org.clojure/tools.macro "0.1.1"]
                  [inflections "0.6.6-SNAPSHOT"]]

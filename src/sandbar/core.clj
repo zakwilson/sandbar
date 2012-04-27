@@ -8,7 +8,7 @@
 
 (ns sandbar.core
   "Common code used throughout Sandbar."
-  (:require [hiccup [page-helpers :as helpers]]))
+  (:require [hiccup [page :as helpers]]))
 
 ;;
 ;; Working with context paths
