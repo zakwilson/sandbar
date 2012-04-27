@@ -14,9 +14,9 @@
                      [ring/ring-devel "1.0.1"]
                      [ring/ring-jetty-adapter "1.0.1"]
                      [ring/ring-httpcore-adapter "0.3.5"]
-                     [lein-difftest "1.3.7"]
+;                     [lein-difftest "1.3.7"]
                      [radagast "1.1.0"]
                      [enlive "1.0.0"]
                      [marginalia "0.7.0-SNAPSHOT"]]
-  :hooks [leiningen.hooks.difftest]
+;  :hooks [leiningen.hooks.difftest]
   :radagast/ns-whitelist #"^sandbar.*")
